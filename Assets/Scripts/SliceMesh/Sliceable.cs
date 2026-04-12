@@ -1,16 +1,19 @@
 using UnityEngine;
 
-public class Slicable
+[RequireComponent(typeof(MeshFilter))]
+[RequireComponent(typeof(MeshRenderer))]
+[RequireComponent(typeof(Collider))]
+public class Sliceable : MonoBehaviour
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
-        
-    }
+    [Header("Settings")]
+    public bool canBeSliced = true;
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
+    [Header("Materials")]
+    public Material capMaterial;
+
+    [Header("Options")]
+    public bool generateCollider = true;
+
+    public MeshFilter MeshFilter => GetComponent<MeshFilter>();
+    public MeshRenderer MeshRenderer => GetComponent<MeshRenderer>();
 }

@@ -1,95 +1,178 @@
-using NUnit.Framework;
-using System.Collections.Generic;
+п»їusing System.Collections.Generic;
 using UnityEngine;
-using static UnityEngine.GraphicsBuffer;
 
 public class MeshSlicer : MonoBehaviour
 {
-    public GameObject testGameObj;
+    [Header("Target")]
+    public Sliceable sliceableObject;
 
-    public Material capMat;
+    [Header("Plane source")]
+    public Transform planeTransform;
 
-    public int[] ClassifyVerticies(Vector3[] vertices, Transform objTransform, Plane plane, float eps = 1e-4f) 
-    {
-        int[] classified_vertices = new int[vertices.Length]; // 1 - выше, -1 - ниже, 0 - примерно на plane
-
-        for (int i = 0; i < vertices.Length; i++) 
-        {
-            var worldPos = objTransform.TransformPoint(vertices[i]); // Переводим из локальных в мировые
-            float distance = plane.GetDistanceToPoint(worldPos); // Вычисляем расстояние до пересекаемой плоскости
-            
-            if (Mathf.Abs(distance) < eps)
-                classified_vertices[i] = 0;
-            else if (distance > 0)
-                classified_vertices[i] = 1;
-            else
-                classified_vertices[i] = -1;
-        }
-
-        return classified_vertices;
-    }
-
-    
+    [Header("Options")]
+    public bool sliceOnStart = false;
+    public bool disableOriginalAfterSlice = true;
+    public bool usePlaneUp = true; // РµСЃР»Рё false в†’ forward
 
     private void Start()
     {
-        TestClassOnObj();
+        if (sliceOnStart && sliceableObject != null)
+            SliceUsingPlaneTransform();
     }
 
-    public void TestClassOnObj() 
+    public bool SliceUsingPlaneTransform()
     {
-        MeshFilter mf = testGameObj.GetComponent<MeshFilter>();
-        if (mf == null) return;
-        Vector3[] vertices = mf.mesh.vertices;
-        Plane testPlane = new Plane(Vector3.up, testGameObj.transform.position);
-
-        var clasvert = ClassifyVerticies(vertices, testGameObj.transform, testPlane);
-        
-        int above = 0, onPlane = 0, below = 0;
-        foreach (int v in clasvert)
+        if (planeTransform == null)
         {
-            if (v == 1) above++;
-            else if (v == 0) onPlane++;
-            else below++;
+            Debug.LogWarning("Plane transform not assigned");
+            return false;
         }
-        Debug.Log($"Above: {above}, OnPlane: {onPlane}, Below: {below}");
 
-        TriangleSlicer.ClassifyTriangles(testGameObj, clasvert, testPlane, out List<Vector3> topVerts, out List<int> topTriangles, out List<Vector3> bottomVerts, out List<int> bottomTriangles, out HashSet<EdgeKey> topContourEdges, out HashSet<EdgeKey> bottomContourEdges);
+        Vector3 normal = usePlaneUp ? planeTransform.up : planeTransform.forward;
+        Plane plane = new Plane(normal, planeTransform.position);
 
-        TriangleSlicer.MergeDuplicateVertices(ref topVerts, ref topContourEdges);
-        TriangleSlicer.MergeDuplicateVertices(ref bottomVerts, ref bottomContourEdges);
+        return SliceTarget(sliceableObject, plane);
+    }
 
-        //ContourEdgeDebugger.ValidateContourEdges("TOP", topContourEdges, topVerts);
-        //ContourEdgeDebugger.ValidateContourEdges("BOTTOM", bottomContourEdges, bottomVerts);
+    public bool SliceTarget(Sliceable sliceable, Plane plane)
+    {
+        if (sliceable == null || !sliceable.canBeSliced)
+            return false;
 
-        var topLoops = CapCreator.ExtractLoopsFromEdges(topContourEdges);
-        var bottomLoops = CapCreator.ExtractLoopsFromEdges(bottomContourEdges);
+        GameObject target = sliceable.gameObject;
 
-        List<Vector3> topCapVertices = new List<Vector3>();
+        if (!TryBuildSlice(target, plane, out Mesh topMesh, out Mesh bottomMesh))
+            return false;
+
+        MeshNObjCreator.CreateNewSubMeshObj(target, topMesh, null, sliceable.capMaterial, "TopPart", true);
+        MeshNObjCreator.CreateNewSubMeshObj(target, bottomMesh, null, sliceable.capMaterial, "BotPart", true);
+
+        target.SetActive(false);
+
+        return true;
+    }
+
+    private bool TryBuildSlice(GameObject target, Plane plane, out Mesh topMesh, out Mesh bottomMesh)
+    {
+        topMesh = null;
+        bottomMesh = null;
+
+        MeshFilter mf = target.GetComponent<MeshFilter>();
+        if (mf == null || mf.sharedMesh == null)
+            return false;
+
+        Mesh mesh = mf.sharedMesh;
+        Vector3[] vertices = mesh.vertices;
+
+        int[] classified = ClassifyVertices(vertices, target.transform, plane);
+
+        if (!HasBothSides(classified))
+        {
+            Debug.LogWarning("Plane does not cut object");
+            return false;
+        }
+
+        TriangleSlicer.ClassifyTriangles(
+            target,
+            classified,
+            plane,
+            out List<Vector3> topVerts,
+            out List<int> topTris,
+            out List<Vector3> botVerts,
+            out List<int> botTris,
+            out HashSet<EdgeKey> topEdges,
+            out HashSet<EdgeKey> botEdges
+        );
+
+        TriangleSlicer.MergeDuplicateVertices(ref topVerts, ref topEdges);
+        TriangleSlicer.MergeDuplicateVertices(ref botVerts, ref botEdges);
+
+        var topLoops = CapCreator.ExtractLoopsFromEdges(topEdges);
+        var botLoops = CapCreator.ExtractLoopsFromEdges(botEdges);
+
+        //CAP TOP
+        List<Vector3> topCapVerts = new List<Vector3>();
         List<int> topCapTris = new List<int>();
+
         foreach (var loop in topLoops)
         {
-            CapCreator.TriangulateCapByType(CapCreator.CapType.EarClipping, loop, topVerts, topCapVertices, topCapTris, -testPlane.normal);
+            CapCreator.TriangulateCapByType(
+                CapCreator.CapType.EarClipping,
+                loop,
+                topVerts,
+                topCapVerts,
+                topCapTris,
+                -plane.normal
+            );
         }
 
-        List<Vector3> bottomCapVertices = new List<Vector3>();
+        //CAP BOTTOM
+        List<Vector3> botCapVerts = new List<Vector3>();
         List<int> botCapTris = new List<int>();
-        foreach (var loop in bottomLoops)
+
+        foreach (var loop in botLoops)
         {
-            CapCreator.TriangulateCapByType(CapCreator.CapType.Fan, loop, bottomVerts, bottomCapVertices, botCapTris, testPlane.normal);
+            CapCreator.TriangulateCapByType(
+                CapCreator.CapType.EarClipping,
+                loop,
+                botVerts,
+                botCapVerts,
+                botCapTris,
+                plane.normal
+            );
         }
 
-        Mesh topMesh = MeshNObjCreator.CreateNewSubMesh(topVerts, topTriangles, topCapVertices, topCapTris, "TopPart");
-        Mesh bottomMesh = MeshNObjCreator.CreateNewSubMesh(bottomVerts, bottomTriangles, bottomCapVertices, botCapTris, "BotPart");
+        topMesh = MeshNObjCreator.CreateNewSubMesh(
+            topVerts,
+            topTris,
+            topCapVerts,
+            topCapTris,
+            target,
+            "TopPart"
+        );
 
-        //MeshNObjCreator.CreateNewObj(testGameObj, topMesh, null);
+        bottomMesh = MeshNObjCreator.CreateNewSubMesh(
+            botVerts,
+            botTris,
+            botCapVerts,
+            botCapTris,
+            target,
+            "BotPart"
+        );
 
-        //MeshNObjCreator.CreateNewObj(testGameObj, bottomMesh, null);
+        return true;
+    }
 
-        MeshNObjCreator.CreateNewSubMeshObj(testGameObj, topMesh, null, capMat, "TopPart");
+    private int[] ClassifyVertices(Vector3[] vertices, Transform t, Plane plane, float eps = 1e-4f)
+    {
+        int[] result = new int[vertices.Length];
 
-        MeshNObjCreator.CreateNewSubMeshObj(testGameObj, bottomMesh, null, capMat, "BotPart");
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Vector3 world = t.TransformPoint(vertices[i]);
+            float d = plane.GetDistanceToPoint(world);
 
-        testGameObj.SetActive(false);
+            if (Mathf.Abs(d) < eps) result[i] = 0;
+            else if (d > 0) result[i] = 1;
+            else result[i] = -1;
+        }
+
+        return result;
+    }
+
+    private bool HasBothSides(int[] classified)
+    {
+        bool above = false;
+        bool below = false;
+
+        foreach (var c in classified)
+        {
+            if (c > 0) above = true;
+            else if (c < 0) below = true;
+
+            if (above && below) return true;
+        }
+
+        return false;
     }
 }
