@@ -39,23 +39,32 @@ public class MeshSlicer : MonoBehaviour
         if (sliceable == null || !sliceable.canBeSliced)
             return false;
 
-        GameObject target = sliceable.gameObject;
 
-        if (!TryBuildSlice(target, plane, out Mesh topMesh, out Mesh bottomMesh))
+        if (!TryBuildSlice(sliceable, plane, out Mesh topMesh, out List<SurfaceType> topFinalTriangleTypes, out Mesh bottomMesh, out List<SurfaceType> bottomFinalTriangleTypes))
             return false;
 
-        MeshNObjCreator.CreateNewSubMeshObj(target, topMesh, null, sliceable.capMaterial, "TopPart", true);
-        MeshNObjCreator.CreateNewSubMeshObj(target, bottomMesh, null, sliceable.capMaterial, "BotPart", true);
+        GameObject target = sliceable.gameObject;
+
+
+        MeshNObjCreator.CreateNewSubMeshObj(target, topMesh, topFinalTriangleTypes, null, sliceable.capMaterial, "TopPart", true);
+        MeshNObjCreator.CreateNewSubMeshObj(target, bottomMesh, bottomFinalTriangleTypes, null, sliceable.capMaterial, "BotPart", true);
 
         target.SetActive(false);
 
         return true;
     }
 
-    private bool TryBuildSlice(GameObject target, Plane plane, out Mesh topMesh, out Mesh bottomMesh)
+    private bool TryBuildSlice(Sliceable sliceable, Plane plane, out Mesh topMesh, out List<SurfaceType> topFinalTriangleTypes, out Mesh bottomMesh, out List<SurfaceType> bottomFinalTriangleTypes)
     {
         topMesh = null;
         bottomMesh = null;
+        topFinalTriangleTypes = null;
+        bottomFinalTriangleTypes = null;
+
+        if (sliceable == null)
+            return false;
+
+        GameObject target = sliceable.gameObject;
 
         MeshFilter mf = target.GetComponent<MeshFilter>();
         if (mf == null || mf.sharedMesh == null)
@@ -72,14 +81,19 @@ public class MeshSlicer : MonoBehaviour
             return false;
         }
 
+        sliceable.EnsureTriangleTypesInitialized();
+
         TriangleSlicer.ClassifyTriangles(
             target,
             classified,
             plane,
+            sliceable.triangleSurfaceTypes,
             out List<Vector3> topVerts,
             out List<int> topTris,
+            out List<SurfaceType> topTriangleTypes,
             out List<Vector3> botVerts,
             out List<int> botTris,
+            out List<SurfaceType> botTriangleTypes,
             out HashSet<EdgeKey> topEdges,
             out HashSet<EdgeKey> botEdges
         );
@@ -89,54 +103,70 @@ public class MeshSlicer : MonoBehaviour
 
         var topLoops = CapCreator.ExtractLoopsFromEdges(topEdges);
         var botLoops = CapCreator.ExtractLoopsFromEdges(botEdges);
+        Vector3 localPlaneNormal = target.transform.InverseTransformDirection(plane.normal).normalized;
 
         //CAP TOP
         List<Vector3> topCapVerts = new List<Vector3>();
         List<int> topCapTris = new List<int>();
+        List<SurfaceType> topCapTriangleTypes = new List<SurfaceType>();
 
         foreach (var loop in topLoops)
         {
             CapCreator.TriangulateCapByType(
-                CapCreator.CapType.EarClipping,
+                CapCreator.CapType.Fan,
                 loop,
                 topVerts,
                 topCapVerts,
                 topCapTris,
-                -plane.normal
+                topCapTriangleTypes,
+                -localPlaneNormal
             );
         }
+
+        topFinalTriangleTypes = new List<SurfaceType>();
+        topFinalTriangleTypes.AddRange(topTriangleTypes);
+        topFinalTriangleTypes.AddRange(topCapTriangleTypes);
 
         //CAP BOTTOM
         List<Vector3> botCapVerts = new List<Vector3>();
         List<int> botCapTris = new List<int>();
+        List<SurfaceType> botCapTriangleTypes = new List<SurfaceType>();
+
 
         foreach (var loop in botLoops)
         {
             CapCreator.TriangulateCapByType(
-                CapCreator.CapType.EarClipping,
+                CapCreator.CapType.Fan,
                 loop,
                 botVerts,
                 botCapVerts,
                 botCapTris,
-                plane.normal
+                botCapTriangleTypes,
+                localPlaneNormal
             );
         }
+
+        bottomFinalTriangleTypes = new List<SurfaceType>();
+        bottomFinalTriangleTypes.AddRange(botTriangleTypes);
+        bottomFinalTriangleTypes.AddRange(botCapTriangleTypes);
 
         topMesh = MeshNObjCreator.CreateNewSubMesh(
             topVerts,
             topTris,
+            topTriangleTypes,
             topCapVerts,
             topCapTris,
-            target,
+            topCapTriangleTypes,
             "TopPart"
         );
 
         bottomMesh = MeshNObjCreator.CreateNewSubMesh(
             botVerts,
             botTris,
+            botTriangleTypes,
             botCapVerts,
             botCapTris,
-            target,
+            botCapTriangleTypes,
             "BotPart"
         );
 

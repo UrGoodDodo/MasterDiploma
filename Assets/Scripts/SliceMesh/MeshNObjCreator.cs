@@ -24,49 +24,73 @@ public static class MeshNObjCreator
         topRend.material = material != null ? material : initObj.GetComponent<MeshRenderer>().material;
     }
 
-    //Поправить для новых капов!
-    public static Mesh CreateNewSubMesh(List<Vector3> mainVertices, List<int> mainTriangles, List<Vector3> capVertices, List<int> capTriangles, GameObject initObj, string name = "")
+    public static Mesh CreateNewSubMesh(List<Vector3> mainVertices, List<int> mainTriangles, List<SurfaceType> mainTriangleTypes, List<Vector3> capVertices, List<int> capTriangles, List<SurfaceType> capTriangleTypes, string name = "")
     {
-        Mesh originalMesh = initObj.GetComponent<MeshFilter>().mesh;
-
         List<Vector3> allVertices = new List<Vector3>();
         allVertices.AddRange(mainVertices);
 
-        int capOffset = allVertices.Count;
+        int capOffset = mainVertices.Count;
         allVertices.AddRange(capVertices);
 
-        List<int> newCapTriangles = new List<int>();
+        List<int> finalCapTriangles = new List<int>();
         foreach (int idx in capTriangles)
         {
-            newCapTriangles.Add(idx + capOffset);
+            finalCapTriangles.Add(idx + capOffset);
         }
 
-        List<int> combinedCapTriangles = new List<int>();
+        List<int> allTriangles = new List<int>();
+        allTriangles.AddRange(mainTriangles);
+        allTriangles.AddRange(finalCapTriangles);
 
-        if (originalMesh != null && originalMesh.subMeshCount > 1)
+        List<SurfaceType> allTriangleTypes = new List<SurfaceType>();
+        allTriangleTypes.AddRange(mainTriangleTypes);
+        allTriangleTypes.AddRange(capTriangleTypes);
+
+        //if (allTriangles.Count / 3 != allTriangleTypes.Count)
+        //{
+        //    Debug.Log("ldsld");
+        //    return null;
+        //}
+
+        List<int> subMeshMain = new List<int>();
+        List<int> subMeshCap = new List<int>();
+
+        for (int tri = 0; tri < allTriangleTypes.Count; tri++)
         {
-            var oldCapTriangles = originalMesh.GetTriangles(1);
-        }
+            int baseIndex = tri * 3;
 
-        combinedCapTriangles.AddRange(newCapTriangles);
+            int i0 = allTriangles[baseIndex];
+            int i1 = allTriangles[baseIndex + 1];
+            int i2 = allTriangles[baseIndex + 2];
+
+            if (allTriangleTypes[tri] == SurfaceType.Cap)
+            {
+                subMeshCap.Add(i0);
+                subMeshCap.Add(i1);
+                subMeshCap.Add(i2);
+            }
+            else
+            {
+                subMeshMain.Add(i0);
+                subMeshMain.Add(i1);
+                subMeshMain.Add(i2);
+            }
+        }
 
         Mesh mesh = new Mesh();
         mesh.name = name;
-
         mesh.SetVertices(allVertices);
         mesh.subMeshCount = 2;
-
-        mesh.SetTriangles(mainTriangles, 0);
-        mesh.SetTriangles(combinedCapTriangles, 1);
-
+        mesh.SetTriangles(subMeshMain, 0);
+        mesh.SetTriangles(subMeshCap, 1);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
-
         return mesh;
     }
 
-    public static GameObject CreateNewSubMeshObj(GameObject initObj, Mesh mesh, Material mainMaterial = null, Material secondMaterial = null, string name = "", bool addSliceable = false) 
+    public static GameObject CreateNewSubMeshObj(GameObject initObj, Mesh mesh, List<SurfaceType> triangleSurfaceTypes = null, Material mainMaterial = null, Material secondMaterial = null, string name = "", bool addSliceable = false) 
     {
+
         GameObject obj = new GameObject(name);
 
         obj.transform.position = initObj.transform.position;
@@ -98,6 +122,11 @@ public static class MeshNObjCreator
                 sliceable.capMaterial = originalSliceable.capMaterial;
                 sliceable.canBeSliced = originalSliceable.canBeSliced;
                 sliceable.generateCollider = originalSliceable.generateCollider;
+            }
+
+            if (triangleSurfaceTypes != null)
+            {
+                sliceable.triangleSurfaceTypes = new List<SurfaceType>(triangleSurfaceTypes);
             }
         }
 

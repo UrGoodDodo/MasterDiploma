@@ -5,7 +5,7 @@ using UnityEngine;
 public static class TriangleSlicer
 {
 
-    public static void ClassifyTriangles(GameObject gameObject, int[] classified_vertices, Plane plane, out List<Vector3> topVertices, out List<int> topTriangles, out List<Vector3> botVertices, out List<int> botTriangles, out HashSet<EdgeKey> topContourEdges, out HashSet<EdgeKey> botContourEdges)
+    public static void ClassifyTriangles(GameObject gameObject, int[] classified_vertices, Plane plane, List<SurfaceType> sourceTriangleTypes, out List<Vector3> topVertices, out List<int> topTriangles, out List<SurfaceType> topTriangleTypes, out List<Vector3> botVertices, out List<int> botTriangles, out List<SurfaceType> botTriangleTypes, out HashSet<EdgeKey> topContourEdges, out HashSet<EdgeKey> botContourEdges)
     {
         Mesh mesh = gameObject.GetComponent<MeshFilter>().mesh;
         Vector3[] mainVertices = mesh.vertices;
@@ -13,8 +13,11 @@ public static class TriangleSlicer
 
         topVertices = new List<Vector3>();
         topTriangles = new List<int>();
+        topTriangleTypes = new List<SurfaceType>();
+        
         botVertices = new List<Vector3>();
         botTriangles = new List<int>();
+        botTriangleTypes = new List<SurfaceType>();
 
         Dictionary<EdgeKey, (int topIndex, int bottomIndex)> edgeCache = new Dictionary<EdgeKey, (int, int)>();
 
@@ -29,9 +32,11 @@ public static class TriangleSlicer
 
             TopVertices = topVertices,
             TopTriangles = topTriangles,
+            TopTriangleTypes = topTriangleTypes,
 
             BotVertices = botVertices,
             BotTriangles = botTriangles,
+            BotTriangleTypes = botTriangleTypes,
 
             TopContourEdges = topContourEdges,
             BotContourEdges = botContourEdges,
@@ -42,6 +47,15 @@ public static class TriangleSlicer
 
         for (int i = 0; i < mainTriangles.Length; i += 3)
         {
+
+            int triangleIndex = i / 3;
+
+            SurfaceType surfaceType = SurfaceType.Main;
+            if (sourceTriangleTypes != null && triangleIndex < sourceTriangleTypes.Count)
+            {
+                surfaceType = sourceTriangleTypes[triangleIndex];
+            }
+
             int triangle_ind_1 = mainTriangles[i];
             int triangle_ind_2 = mainTriangles[i + 1];
             int triangle_ind_3 = mainTriangles[i + 2];
@@ -59,53 +73,58 @@ public static class TriangleSlicer
 
             if (aboveCount == 3)
             {
-                TringleSlicerHelper.ProcessAllTop(triangle_ind_1, triangle_ind_2, triangle_ind_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessAllTop(triangle_ind_1, triangle_ind_2, triangle_ind_3, origNormal, surfaceType, ref ctx);
             }
             else if (belowCount == 3)
             {
-                TringleSlicerHelper.ProcessAllBottom(triangle_ind_1, triangle_ind_2, triangle_ind_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessAllBottom(triangle_ind_1, triangle_ind_2, triangle_ind_3, origNormal, surfaceType, ref ctx);
             }
             else if (aboveCount == 2 && onCount == 1)
             {
-                TringleSlicerHelper.ProcessTwoAboveOneOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessTwoAboveOneOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, surfaceType, ref ctx);
             }
             else if (belowCount == 2 && onCount == 1)
             {
-                TringleSlicerHelper.ProcessTwoBelowOneOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessTwoBelowOneOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, surfaceType, ref ctx);
             }
             else if (aboveCount == 1 && onCount == 2)
             {
-                TringleSlicerHelper.ProcessOneAboveTwoOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessOneAboveTwoOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, surfaceType, ref ctx);
             }
             else if (belowCount == 1 && onCount == 2)
             {
-                TringleSlicerHelper.ProcessOneBelowTwoOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessOneBelowTwoOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, surfaceType, ref ctx);
             }
             else if (aboveCount == 2 && belowCount == 1)
             {
-                TringleSlicerHelper.ProcessTwoAboveOneBelow(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessTwoAboveOneBelow(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, surfaceType, ref ctx);
             }
             else if (aboveCount == 1 && belowCount == 2)
             {
-                TringleSlicerHelper.ProcessOneAboveTwoBelow(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessOneAboveTwoBelow(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, surfaceType, ref ctx);
             }
             else if (aboveCount == 1 && belowCount == 1 && onCount == 1)
             {
-                TringleSlicerHelper.ProcessOneAboveOneBelowOneOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessOneAboveOneBelowOneOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, vert_sign_1, vert_sign_2, vert_sign_3, origNormal, surfaceType, ref ctx);
             }
             else if (onCount == 3)
             {
-                TringleSlicerHelper.ProcessAllOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, origNormal, ref ctx);
+                TringleSlicerHelper.ProcessAllOnPlane(triangle_ind_1, triangle_ind_2, triangle_ind_3, origNormal, surfaceType, ref ctx);
             }
         }
 
         topVertices = ctx.TopVertices;
         topTriangles = ctx.TopTriangles;
+        topTriangleTypes = ctx.TopTriangleTypes;
+
         botVertices = ctx.BotVertices;
         botTriangles = ctx.BotTriangles;
+        botTriangleTypes = ctx.BotTriangleTypes;
+
         topContourEdges = ctx.TopContourEdges;
         botContourEdges = ctx.BotContourEdges;
     }
+
     public static void MergeDuplicateVertices( ref List<Vector3> vertices, ref HashSet<EdgeKey> contourEdges,float epsilon = 0.001f)
     {
         var positionToIndex = new Dictionary<Vector3, int>();

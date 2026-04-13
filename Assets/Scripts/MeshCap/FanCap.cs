@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class FanCap : ICapStrategy
 {
-    public void TriangulateCap(List<int> loop, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, Vector3 normal)
+    public void TriangulateCap(List<int> loop, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, List<SurfaceType> outTriangleTypes, Vector3 normal)
     {
         if (loop.Count < 3) return;
 
@@ -49,6 +49,8 @@ public class FanCap : ICapStrategy
                 outTriangles.Add(idxB);
                 outTriangles.Add(idxA);
             }
+
+            outTriangleTypes.Add(SurfaceType.Cap);
         }
     }
 }

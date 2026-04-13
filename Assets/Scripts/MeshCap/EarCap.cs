@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class EarCap : ICapStrategy
 {
-    public void TriangulateCap(List<int> loop, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, Vector3 normal)
+    public void TriangulateCap(List<int> loop, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, List<SurfaceType> outTriangleTypes, Vector3 normal)
     {
         if (loop.Count < 3) return;
 
@@ -58,6 +58,7 @@ public class EarCap : ICapStrategy
                 outTriangles.Add(capLoopIndices[i0]);
                 outTriangles.Add(capLoopIndices[i1]);
                 outTriangles.Add(capLoopIndices[i2]);
+                outTriangleTypes.Add(SurfaceType.Cap);
 
                 indices.RemoveAt(i);
                 earFound = true;
@@ -66,7 +67,7 @@ public class EarCap : ICapStrategy
 
             if (!earFound)
             {
-                //Debug.LogWarning("EarClipping: no ear found, stopping.");
+                //Debug.LogWarning("asdf.");
                 break;
             }
         }
@@ -75,6 +76,7 @@ public class EarCap : ICapStrategy
             outTriangles.Add(capLoopIndices[indices[0]]);
             outTriangles.Add(capLoopIndices[indices[1]]);
             outTriangles.Add(capLoopIndices[indices[2]]);
+            outTriangleTypes.Add(SurfaceType.Cap);
         }
     }
 

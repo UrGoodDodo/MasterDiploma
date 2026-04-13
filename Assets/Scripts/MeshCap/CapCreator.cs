@@ -9,7 +9,7 @@ public static class CapCreator
         EarClipping
     }
 
-    public static void TriangulateCapByType(CapType capType , List<int> loop, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, Vector3 normal)
+    public static void TriangulateCapByType(CapType capType , List<int> loop, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, List<SurfaceType> outTriangleTypes, Vector3 normal)
     {
         ICapStrategy capStrategy;
 
@@ -26,7 +26,7 @@ public static class CapCreator
                 break;
         }
 
-        capStrategy.TriangulateCap(loop, mainVertices, capVertices, outTriangles, normal);
+        capStrategy.TriangulateCap(loop, mainVertices, capVertices, outTriangles, outTriangleTypes, normal);
     }
 
     //-----------------------------------------------------------------------------------------
