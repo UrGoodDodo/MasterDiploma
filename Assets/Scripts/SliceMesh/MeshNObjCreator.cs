@@ -24,13 +24,21 @@ public static class MeshNObjCreator
         topRend.material = material != null ? material : initObj.GetComponent<MeshRenderer>().material;
     }
 
-    public static Mesh CreateNewSubMesh(List<Vector3> mainVertices, List<int> mainTriangles, List<SurfaceType> mainTriangleTypes, List<Vector3> capVertices, List<int> capTriangles, List<SurfaceType> capTriangleTypes, string name = "")
+    public static Mesh CreateNewSubMesh(List<Vector3> mainVertices, List<Vector2> mainUVs, List<int> mainTriangles, List<SurfaceType> mainTriangleTypes, List<Vector3> capVertices, List<int> capTriangles, List<SurfaceType> capTriangleTypes, string name = "")
     {
         List<Vector3> allVertices = new List<Vector3>();
         allVertices.AddRange(mainVertices);
 
         int capOffset = mainVertices.Count;
         allVertices.AddRange(capVertices);
+
+        List<Vector2> allUVs = new List<Vector2>();
+        allUVs.AddRange(mainUVs);
+
+        for (int i = 0; i < capVertices.Count; i++)
+        {
+            allUVs.Add(Vector2.zero);
+        }
 
         List<int> finalCapTriangles = new List<int>();
         foreach (int idx in capTriangles)
@@ -83,6 +91,7 @@ public static class MeshNObjCreator
         mesh.subMeshCount = 2;
         mesh.SetTriangles(subMeshMain, 0);
         mesh.SetTriangles(subMeshCap, 1);
+        mesh.SetUVs(0, allUVs);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         return mesh;
@@ -140,7 +149,7 @@ public static class MeshNObjCreator
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
-            Vector3 randomForce = Random.onUnitSphere * 0.7f;
+            Vector3 randomForce = Random.onUnitSphere * 3f;
             rb.AddForce(randomForce, ForceMode.Impulse);
         }
 

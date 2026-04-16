@@ -5,17 +5,25 @@ using UnityEngine;
 public static class TriangleSlicer
 {
 
-    public static void ClassifyTriangles(GameObject gameObject, int[] classified_vertices, Plane plane, List<SurfaceType> sourceTriangleTypes, out List<Vector3> topVertices, out List<int> topTriangles, out List<SurfaceType> topTriangleTypes, out List<Vector3> botVertices, out List<int> botTriangles, out List<SurfaceType> botTriangleTypes, out HashSet<EdgeKey> topContourEdges, out HashSet<EdgeKey> botContourEdges)
+    public static void ClassifyTriangles(GameObject gameObject, int[] classified_vertices, Plane plane, List<SurfaceType> sourceTriangleTypes, out List<Vector3> topVertices, out List<Vector2> topUVs, out List<int> topTriangles, out List<SurfaceType> topTriangleTypes, out List<Vector3> botVertices, out List<Vector2> botUVs, out List<int> botTriangles, out List<SurfaceType> botTriangleTypes, out HashSet<EdgeKey> topContourEdges, out HashSet<EdgeKey> botContourEdges)
     {
         Mesh mesh = gameObject.GetComponent<MeshFilter>().mesh;
         Vector3[] mainVertices = mesh.vertices;
         int[] mainTriangles = mesh.triangles;
+        
+        Vector2[] mainUVs = mesh.uv;
+        if (mainUVs == null || mainUVs.Length != mainVertices.Length)
+        {
+            mainUVs = new Vector2[mainVertices.Length];
+        }
 
         topVertices = new List<Vector3>();
+        topUVs = new List<Vector2>();
         topTriangles = new List<int>();
         topTriangleTypes = new List<SurfaceType>();
         
         botVertices = new List<Vector3>();
+        botUVs = new List<Vector2>();
         botTriangles = new List<int>();
         botTriangleTypes = new List<SurfaceType>();
 
@@ -29,12 +37,15 @@ public static class TriangleSlicer
             Transform = gameObject.transform,
             Plane = plane,
             MainVertices = mainVertices,
+            MainUVs = mainUVs,
 
             TopVertices = topVertices,
+            TopUVs = topUVs,
             TopTriangles = topTriangles,
             TopTriangleTypes = topTriangleTypes,
 
             BotVertices = botVertices,
+            BotUVs = botUVs,
             BotTriangles = botTriangles,
             BotTriangleTypes = botTriangleTypes,
 
@@ -114,10 +125,12 @@ public static class TriangleSlicer
         }
 
         topVertices = ctx.TopVertices;
+        topUVs = ctx.TopUVs;
         topTriangles = ctx.TopTriangles;
         topTriangleTypes = ctx.TopTriangleTypes;
 
         botVertices = ctx.BotVertices;
+        botUVs = ctx.BotUVs;
         botTriangles = ctx.BotTriangles;
         botTriangleTypes = ctx.BotTriangleTypes;
 
@@ -125,30 +138,44 @@ public static class TriangleSlicer
         botContourEdges = ctx.BotContourEdges;
     }
 
-    public static void MergeDuplicateVertices( ref List<Vector3> vertices, ref HashSet<EdgeKey> contourEdges,float epsilon = 0.001f)
+    public static void MergeDuplicateVertices(ref List<Vector3> vertices, ref List<Vector2> uvs, ref List<int> triangles, ref HashSet<EdgeKey> contourEdges, float epsilon = 0.001f)
     {
-        var positionToIndex = new Dictionary<Vector3, int>();
-        var oldToNew = new Dictionary<int, int>();
+        var newVertices = new List<Vector3>();
+        var newUVs = new List<Vector2>();
+        var oldToNew = new int[vertices.Count];
 
         for (int i = 0; i < vertices.Count; i++)
         {
             Vector3 pos = vertices[i];
-            bool found = false;
-            foreach (var kvp in positionToIndex)
+            Vector2 uv = (uvs != null && i < uvs.Count) ? uvs[i] : Vector2.zero;
+
+            int foundIndex = -1;
+
+            for (int j = 0; j < newVertices.Count; j++)
             {
-                if (Vector3.Distance(kvp.Key, pos) < epsilon)
+                if (Vector3.Distance(newVertices[j], pos) < epsilon)
                 {
-                    oldToNew[i] = kvp.Value;
-                    found = true;
+                    foundIndex = j;
                     break;
                 }
             }
 
-            if (!found)
+            if (foundIndex >= 0)
             {
-                positionToIndex[pos] = i;
-                oldToNew[i] = i;
+                oldToNew[i] = foundIndex;
             }
+            else
+            {
+                int newIndex = newVertices.Count;
+                newVertices.Add(pos);
+                newUVs.Add(uv);
+                oldToNew[i] = newIndex;
+            }
+        }
+
+        for (int i = 0; i < triangles.Count; i++)
+        {
+            triangles[i] = oldToNew[triangles[i]];
         }
 
         var newEdges = new HashSet<EdgeKey>();
@@ -156,11 +183,49 @@ public static class TriangleSlicer
         {
             int newA = oldToNew[edge.A];
             int newB = oldToNew[edge.B];
+
             if (newA != newB)
             {
                 newEdges.Add(new EdgeKey(newA, newB));
             }
         }
+
+        vertices = newVertices;
+        uvs = newUVs;
         contourEdges = newEdges;
+    }
+
+    public static HashSet<EdgeKey> RemapContourEdgesByPosition( List<Vector3> vertices, HashSet<EdgeKey> contourEdges, float epsilon = 0.001f)
+    {
+        var oldToRepresentative = new int[vertices.Count];
+
+        for (int i = 0; i < vertices.Count; i++)
+        {
+            oldToRepresentative[i] = i;
+
+            for (int j = 0; j < i; j++)
+            {
+                if (Vector3.Distance(vertices[i], vertices[j]) < epsilon)
+                {
+                    oldToRepresentative[i] = oldToRepresentative[j];
+                    break;
+                }
+            }
+        }
+
+        var remappedEdges = new HashSet<EdgeKey>();
+
+        foreach (var edge in contourEdges)
+        {
+            int a = oldToRepresentative[edge.A];
+            int b = oldToRepresentative[edge.B];
+
+            if (a != b)
+            {
+                remappedEdges.Add(new EdgeKey(a, b));
+            }
+        }
+
+        return remappedEdges;
     }
 }

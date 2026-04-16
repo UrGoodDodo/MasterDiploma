@@ -5,17 +5,17 @@ public static class TringleSlicerHelper
 {
     public static void ProcessAllTop(int i0, int i1, int i2, Vector3 origNormal, SurfaceType surfaceType, ref SliceContext ctx) //+++
     {
-        int t0 = AddVertex(ctx.TopVertices, ctx.MainVertices[i0]);
-        int t1 = AddVertex(ctx.TopVertices, ctx.MainVertices[i1]);
-        int t2 = AddVertex(ctx.TopVertices, ctx.MainVertices[i2]);
+        int t0 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[i0], ctx.MainUVs[i0]);
+        int t1 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[i1], ctx.MainUVs[i1]);
+        int t2 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[i2], ctx.MainUVs[i2]);
         AddOrientedTriangle(ctx.TopVertices, ctx.TopTriangles, ctx.TopTriangleTypes, t0, t1, t2, origNormal, surfaceType);
     }
 
     public static void ProcessAllBottom(int i0, int i1, int i2, Vector3 origNormal, SurfaceType surfaceType, ref SliceContext ctx) //---
     {
-        int b0 = AddVertex(ctx.BotVertices, ctx.MainVertices[i0]);
-        int b1 = AddVertex(ctx.BotVertices, ctx.MainVertices[i1]);
-        int b2 = AddVertex(ctx.BotVertices, ctx.MainVertices[i2]);
+        int b0 = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[i0], ctx.MainUVs[i0]);
+        int b1 = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[i1], ctx.MainUVs[i1]);
+        int b2 = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[i2], ctx.MainUVs[i2]);
         AddOrientedTriangle(ctx.BotVertices, ctx.BotTriangles, ctx.BotTriangleTypes, b0, b1, b2, origNormal, surfaceType);
     }
 
@@ -23,14 +23,14 @@ public static class TringleSlicerHelper
     {
         ProcessAllTop(i0, i1, i2, origNormal, surfaceType, ref ctx);
         int onIdx = (s0 == 0) ? i0 : (s1 == 0 ? i1 : i2);
-        GetOrCreateSharedVertex(onIdx, ctx.MainVertices, ctx.TopVertices, ctx.BotVertices, ctx.OnPlaneVertexCache, out _, out _);
+        GetOrCreateSharedVertex(onIdx, ctx.MainVertices, ctx.MainUVs, ctx.TopVertices, ctx.TopUVs, ctx.BotVertices, ctx.BotUVs, ctx.OnPlaneVertexCache, out _, out _);
     }
 
     public static void ProcessTwoBelowOneOnPlane(int i0, int i1, int i2, int s0, int s1, int s2, Vector3 origNormal, SurfaceType surfaceType, ref SliceContext ctx) //--0
     {
         ProcessAllBottom(i0, i1, i2, origNormal, surfaceType, ref ctx);
         int onIdx = (s0 == 0) ? i0 : (s1 == 0 ? i1 : i2);
-        GetOrCreateSharedVertex(onIdx, ctx.MainVertices, ctx.TopVertices, ctx.BotVertices, ctx.OnPlaneVertexCache, out _, out _);
+        GetOrCreateSharedVertex(onIdx, ctx.MainVertices, ctx.MainUVs, ctx.TopVertices, ctx.TopUVs, ctx.BotVertices, ctx.BotUVs, ctx.OnPlaneVertexCache, out _, out _);
     }
 
     public static void ProcessOneAboveTwoOnPlane(int i0, int i1, int i2, int s0, int s1, int s2, Vector3 origNormal, SurfaceType surfaceType, ref SliceContext ctx) //+00
@@ -40,8 +40,8 @@ public static class TringleSlicerHelper
         if (s0 == 0) onOriginal.Add(i0);
         if (s1 == 0) onOriginal.Add(i1);
         if (s2 == 0) onOriginal.Add(i2);
-        GetOrCreateSharedVertex(onOriginal[0], ctx.MainVertices, ctx.TopVertices, ctx.BotVertices, ctx.OnPlaneVertexCache, out int topOn0, out int botOn0);
-        GetOrCreateSharedVertex(onOriginal[1], ctx.MainVertices, ctx.TopVertices, ctx.BotVertices, ctx.OnPlaneVertexCache, out int topOn1, out int botOn1);
+        GetOrCreateSharedVertex(onOriginal[0], ctx.MainVertices, ctx.MainUVs, ctx.TopVertices, ctx.TopUVs, ctx.BotVertices, ctx.BotUVs, ctx.OnPlaneVertexCache, out int topOn0, out int botOn0);
+        GetOrCreateSharedVertex(onOriginal[1], ctx.MainVertices, ctx.MainUVs, ctx.TopVertices, ctx.TopUVs, ctx.BotVertices, ctx.BotUVs, ctx.OnPlaneVertexCache, out int topOn1, out int botOn1);
         ctx.TopContourEdges.Add(new EdgeKey(topOn0, topOn1));
         ctx.BotContourEdges.Add(new EdgeKey(botOn0, botOn1));
     }
@@ -53,8 +53,8 @@ public static class TringleSlicerHelper
         if (s0 == 0) onOriginal.Add(i0);
         if (s1 == 0) onOriginal.Add(i1);
         if (s2 == 0) onOriginal.Add(i2);
-        GetOrCreateSharedVertex(onOriginal[0], ctx.MainVertices, ctx.TopVertices, ctx.BotVertices, ctx.OnPlaneVertexCache, out int topOn0, out int botOn0);
-        GetOrCreateSharedVertex(onOriginal[1], ctx.MainVertices, ctx.TopVertices, ctx.BotVertices, ctx.OnPlaneVertexCache, out int topOn1, out int botOn1);
+        GetOrCreateSharedVertex(onOriginal[0], ctx.MainVertices, ctx.MainUVs, ctx.TopVertices, ctx.TopUVs, ctx.BotVertices, ctx.BotUVs, ctx.OnPlaneVertexCache, out int topOn0, out int botOn0);
+        GetOrCreateSharedVertex(onOriginal[1], ctx.MainVertices, ctx.MainUVs, ctx.TopVertices, ctx.TopUVs, ctx.BotVertices, ctx.BotUVs, ctx.OnPlaneVertexCache, out int topOn1, out int botOn1);
         ctx.TopContourEdges.Add(new EdgeKey(topOn0, topOn1));
         ctx.BotContourEdges.Add(new EdgeKey(botOn0, botOn1));
     }
@@ -65,15 +65,15 @@ public static class TringleSlicerHelper
         int belowIdx = (s0 < 0) ? i0 : (s1 < 0 ? i1 : i2);
         int onIdx = (s0 == 0) ? i0 : (s1 == 0 ? i1 : i2);
         GetOrCreateIntersection(aboveIdx, belowIdx, ref ctx, out int topIntersection, out int botIntersection);
-        GetOrCreateSharedVertex(onIdx, ctx.MainVertices, ctx.TopVertices, ctx.BotVertices, ctx.OnPlaneVertexCache, out int topOn, out int botOn);
+        GetOrCreateSharedVertex(onIdx, ctx.MainVertices, ctx.MainUVs, ctx.TopVertices, ctx.TopUVs, ctx.BotVertices, ctx.BotUVs, ctx.OnPlaneVertexCache, out int topOn, out int botOn);
 
         ctx.TopContourEdges.Add(new EdgeKey(topOn, topIntersection));
         ctx.BotContourEdges.Add(new EdgeKey(botOn, botIntersection));
 
-        int topAbove = AddVertex(ctx.TopVertices, ctx.MainVertices[aboveIdx]);
+        int topAbove = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[aboveIdx], ctx.MainUVs[aboveIdx]);
         AddOrientedTriangle(ctx.TopVertices, ctx.TopTriangles, ctx.TopTriangleTypes, topAbove, topOn, topIntersection, origNormal, surfaceType);
 
-        int botBelow = AddVertex(ctx.BotVertices, ctx.MainVertices[belowIdx]);
+        int botBelow = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[belowIdx], ctx.MainUVs[belowIdx]);
         AddOrientedTriangle(ctx.BotVertices, ctx.BotTriangles, ctx.BotTriangleTypes, botBelow, botIntersection, botOn, origNormal, surfaceType);
     }
 
@@ -91,13 +91,13 @@ public static class TringleSlicerHelper
         ctx.TopContourEdges.Add(new EdgeKey(topEdge1, topEdge2));
         ctx.BotContourEdges.Add(new EdgeKey(botEdge1, botEdge2));
 
-        int topA1 = AddVertex(ctx.TopVertices, ctx.MainVertices[aboveIdx1]);
-        int topA2 = AddVertex(ctx.TopVertices, ctx.MainVertices[aboveIdx2]);
+        int topA1 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[aboveIdx1], ctx.MainUVs[aboveIdx1]);
+        int topA2 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[aboveIdx2], ctx.MainUVs[aboveIdx2]);
 
         AddOrientedTriangle(ctx.TopVertices, ctx.TopTriangles, ctx.TopTriangleTypes, topA1, topA2, topEdge1, origNormal, surfaceType);
         AddOrientedTriangle(ctx.TopVertices, ctx.TopTriangles, ctx.TopTriangleTypes, topA2, topEdge2, topEdge1, origNormal, surfaceType);
 
-        int botB = AddVertex(ctx.BotVertices, ctx.MainVertices[belowIdx]);
+        int botB = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[belowIdx], ctx.MainUVs[belowIdx]);
         AddOrientedTriangle(ctx.BotVertices, ctx.BotTriangles, ctx.BotTriangleTypes, botB, botEdge1, botEdge2, origNormal, surfaceType);
     }
 
@@ -115,11 +115,11 @@ public static class TringleSlicerHelper
         ctx.TopContourEdges.Add(new EdgeKey(topEdge1, topEdge2));
         ctx.BotContourEdges.Add(new EdgeKey(botEdge1, botEdge2));
 
-        int topA = AddVertex(ctx.TopVertices, ctx.MainVertices[aboveIdx]);
+        int topA = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[aboveIdx], ctx.MainUVs[aboveIdx]);
         AddOrientedTriangle(ctx.TopVertices, ctx.TopTriangles, ctx.TopTriangleTypes, topA, topEdge1, topEdge2, origNormal, surfaceType);
 
-        int botB1 = AddVertex(ctx.BotVertices, ctx.MainVertices[belowIdx1]);
-        int botB2 = AddVertex(ctx.BotVertices, ctx.MainVertices[belowIdx2]);
+        int botB1 = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[belowIdx1], ctx.MainUVs[belowIdx1]);
+        int botB2 = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[belowIdx2], ctx.MainUVs[belowIdx2]);
 
         AddOrientedTriangle(ctx.BotVertices, ctx.BotTriangles, ctx.BotTriangleTypes, botB1, botB2, botEdge1, origNormal, surfaceType);
         AddOrientedTriangle(ctx.BotVertices, ctx.BotTriangles, ctx.BotTriangleTypes, botB2, botEdge2, botEdge1, origNormal, surfaceType);
@@ -127,19 +127,26 @@ public static class TringleSlicerHelper
 
     public static void ProcessAllOnPlane(int i0, int i1, int i2, Vector3 origNormal, SurfaceType surfaceType, ref SliceContext ctx) //000
     {
-        int t0 = AddVertex(ctx.TopVertices, ctx.MainVertices[i0]);
-        int t1 = AddVertex(ctx.TopVertices, ctx.MainVertices[i1]);
-        int t2 = AddVertex(ctx.TopVertices, ctx.MainVertices[i2]);
+        int t0 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[i0], ctx.MainUVs[i0]);
+        int t1 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[i1], ctx.MainUVs[i1]);
+        int t2 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[i2], ctx.MainUVs[i2]);
         AddOrientedTriangle(ctx.TopVertices, ctx.TopTriangles, ctx.TopTriangleTypes, t0, t1, t2, origNormal, surfaceType);
 
-        int b0 = AddVertex(ctx.BotVertices, ctx.MainVertices[i0]);
-        int b1 = AddVertex(ctx.BotVertices, ctx.MainVertices[i1]);
-        int b2 = AddVertex(ctx.BotVertices, ctx.MainVertices[i2]);
+        int b0 = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[i0], ctx.MainUVs[i0]);
+        int b1 = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[i1], ctx.MainUVs[i1]);
+        int b2 = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[i2], ctx.MainUVs[i2]);
         AddOrientedTriangle(ctx.BotVertices, ctx.BotTriangles, ctx.BotTriangleTypes, b0, b1, b2, origNormal, surfaceType);
     }
 
     //-------------------------------------------------------------------------------------------------
 
+    static int AddVertex(List<Vector3> vertices, List<Vector2> uvs, Vector3 point, Vector2 uv)
+    {
+        int index = vertices.Count;
+        vertices.Add(point);
+        uvs.Add(uv);
+        return index;
+    }
     static int AddVertex(List<Vector3> vertices, Vector3 point)
     {
         int index = vertices.Count;
@@ -170,7 +177,7 @@ public static class TringleSlicerHelper
         triangleTypes.Add(surfaceType);
     }
 
-    static void GetOrCreateSharedVertex( int originalIdx, Vector3[] mainVertices, List<Vector3> topVertices, List<Vector3> botVertices, Dictionary<int, (int top, int bottom)> cache, out int topIndex, out int botIndex)
+    static void GetOrCreateSharedVertex( int originalIdx, Vector3[] mainVertices, Vector2[] mainUVs, List<Vector3> topVertices, List<Vector2> topUVs, List<Vector3> botVertices, List<Vector2> botUVs, Dictionary<int, (int top, int bottom)> cache, out int topIndex, out int botIndex)
     {
         if (cache.TryGetValue(originalIdx, out var existing))
         {
@@ -179,8 +186,8 @@ public static class TringleSlicerHelper
             return;
         }
 
-        topIndex = AddVertex(topVertices, mainVertices[originalIdx]);
-        botIndex = AddVertex(botVertices, mainVertices[originalIdx]);
+        topIndex = AddVertex(topVertices, topUVs, mainVertices[originalIdx], mainUVs[originalIdx]);
+        botIndex = AddVertex(botVertices, botUVs, mainVertices[originalIdx], mainUVs[originalIdx]);
 
         cache.Add(originalIdx, (topIndex, botIndex));
     }
@@ -194,9 +201,27 @@ public static class TringleSlicerHelper
             botIndex = existing.bottom;
             return;
         }
-        Vector3 intersectionLocal = GetIntersectionPointLocal(idxA, idxB, ctx.MainVertices, ctx.Transform, ctx.Plane);
-        topIndex = AddVertex(ctx.TopVertices, intersectionLocal);
-        botIndex = AddVertex(ctx.BotVertices, intersectionLocal);
+
+        Vector3 intersectionLocal = GetIntersectionPointLocal(
+            idxA,
+            idxB,
+            ctx.MainVertices,
+            ctx.Transform,
+            ctx.Plane
+        );
+
+        Vector2 intersectionUV = GetIntersectionUV(
+            idxA,
+            idxB,
+            ctx.MainVertices,
+            ctx.MainUVs,
+            ctx.Transform,
+            ctx.Plane
+        );
+
+        topIndex = AddVertex(ctx.TopVertices, ctx.TopUVs, intersectionLocal, intersectionUV);
+        botIndex = AddVertex(ctx.BotVertices, ctx.BotUVs, intersectionLocal, intersectionUV);
+
         ctx.EdgeCache.Add(key, (topIndex, botIndex));
     }
 
@@ -209,5 +234,19 @@ public static class TringleSlicerHelper
         float t = -distA / (distB - distA); // t от 0 до 1
         Vector3 worldPoint = worldA + t * (worldB - worldA);
         return objTransform.InverseTransformPoint(worldPoint);
+    }
+
+    static Vector2 GetIntersectionUV(int idxA, int idxB, Vector3[] localVerts, Vector2[] mainUVs, Transform objTransform, Plane worldPlane)
+    {
+        Vector3 worldA = objTransform.TransformPoint(localVerts[idxA]);
+        Vector3 worldB = objTransform.TransformPoint(localVerts[idxB]);
+
+        float distA = worldPlane.GetDistanceToPoint(worldA);
+        float distB = worldPlane.GetDistanceToPoint(worldB);
+
+        float t = -distA / (distB - distA);
+        t = Mathf.Clamp01(t);
+
+        return Vector2.Lerp(mainUVs[idxA], mainUVs[idxB], t);
     }
 }

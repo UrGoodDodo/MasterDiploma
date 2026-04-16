@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+//using UnityEngine.ProBuilder.Shapes;
 
 public class MeshSlicer : MonoBehaviour
 {
@@ -89,20 +90,22 @@ public class MeshSlicer : MonoBehaviour
             plane,
             sliceable.triangleSurfaceTypes,
             out List<Vector3> topVerts,
+            out List<Vector2> topUVs,
             out List<int> topTris,
             out List<SurfaceType> topTriangleTypes,
             out List<Vector3> botVerts,
+            out List<Vector2> botUVs,
             out List<int> botTris,
             out List<SurfaceType> botTriangleTypes,
             out HashSet<EdgeKey> topEdges,
             out HashSet<EdgeKey> botEdges
         );
 
-        TriangleSlicer.MergeDuplicateVertices(ref topVerts, ref topEdges);
-        TriangleSlicer.MergeDuplicateVertices(ref botVerts, ref botEdges);
+        var mergedTopEdges = TriangleSlicer.RemapContourEdgesByPosition(topVerts, topEdges);
+        var mergedBotEdges = TriangleSlicer.RemapContourEdgesByPosition(botVerts, botEdges);
 
-        var topLoops = CapCreator.ExtractLoopsFromEdges(topEdges);
-        var botLoops = CapCreator.ExtractLoopsFromEdges(botEdges);
+        var topLoops = CapCreator.ExtractLoopsFromEdges(mergedTopEdges);
+        var botLoops = CapCreator.ExtractLoopsFromEdges(mergedBotEdges);
         Vector3 localPlaneNormal = target.transform.InverseTransformDirection(plane.normal).normalized;
 
         //CAP TOP
@@ -113,7 +116,7 @@ public class MeshSlicer : MonoBehaviour
         foreach (var loop in topLoops)
         {
             CapCreator.TriangulateCapByType(
-                CapCreator.CapType.Fan,
+                CapCreator.CapType.EarClipping,
                 loop,
                 topVerts,
                 topCapVerts,
@@ -136,7 +139,7 @@ public class MeshSlicer : MonoBehaviour
         foreach (var loop in botLoops)
         {
             CapCreator.TriangulateCapByType(
-                CapCreator.CapType.Fan,
+                CapCreator.CapType.EarClipping,
                 loop,
                 botVerts,
                 botCapVerts,
@@ -152,6 +155,7 @@ public class MeshSlicer : MonoBehaviour
 
         topMesh = MeshNObjCreator.CreateNewSubMesh(
             topVerts,
+            topUVs,
             topTris,
             topTriangleTypes,
             topCapVerts,
@@ -162,6 +166,7 @@ public class MeshSlicer : MonoBehaviour
 
         bottomMesh = MeshNObjCreator.CreateNewSubMesh(
             botVerts,
+            botUVs,
             botTris,
             botTriangleTypes,
             botCapVerts,
