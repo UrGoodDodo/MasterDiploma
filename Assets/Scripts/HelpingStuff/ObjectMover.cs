@@ -5,8 +5,13 @@ public class ObjectMover : MonoBehaviour
     public float moveSpeed = 5f;
     public float rotateSpeed = 120f;
 
+    public SwordAttackController attackController;
+
     void Update()
     {
+        if (attackController != null && attackController.IsAttacking)
+            return;
+
         float h = Input.GetAxis("Horizontal");
         float v = Input.GetAxis("Vertical");
 

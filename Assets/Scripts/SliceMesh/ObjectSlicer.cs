@@ -6,15 +6,17 @@ using System.Collections.Generic;
 public class ObjectSlicer : MonoBehaviour
 {
     [Header("Blade Setup")]
-    public Transform bladeBase; 
-    public Transform bladeTip; 
+    public Transform bladeBase;
+    public Transform bladeTip;
 
     [Header("Slicing")]
     public LayerMask sliceableLayer;
-    public float minCutDistance = 0.01f; 
+    public float minCutDistance = 0.01f;
+
+    [Header("Attack State")]
+    public bool canSlice = false;
 
     private MeshSlicer meshSlicer;
-
     private Dictionary<Sliceable, Vector3> entryPoints = new();
 
     private void Awake()
@@ -29,8 +31,19 @@ public class ObjectSlicer : MonoBehaviour
         col.isTrigger = true;
     }
 
+    public void SetSliceEnabled(bool value)
+    {
+        canSlice = value;
+
+        if (!canSlice)
+            entryPoints.Clear();
+    }
+
     private void OnTriggerEnter(Collider other)
     {
+        if (!canSlice)
+            return;
+
         if (!IsInLayerMask(other.gameObject.layer, sliceableLayer))
             return;
 
@@ -42,6 +55,9 @@ public class ObjectSlicer : MonoBehaviour
 
     private void OnTriggerExit(Collider other)
     {
+        if (!canSlice)
+            return;
+
         if (!IsInLayerMask(other.gameObject.layer, sliceableLayer))
             return;
 
@@ -63,7 +79,6 @@ public class ObjectSlicer : MonoBehaviour
         cutDir.Normalize();
 
         Vector3 bladeDir = (bladeTip.position - bladeBase.position).normalized;
-
         Vector3 normal = Vector3.Cross(cutDir, bladeDir).normalized;
 
         if (normal.sqrMagnitude < 0.0001f)
@@ -76,8 +91,6 @@ public class ObjectSlicer : MonoBehaviour
             meshSlicer.SliceTarget(sliceable, slicePlane);
         }
     }
-
-    // ------------------------------------------------------
 
     private bool IsInLayerMask(int layer, LayerMask mask)
     {

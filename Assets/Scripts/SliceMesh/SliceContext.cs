@@ -18,6 +18,11 @@ public class SliceContext
     public HashSet<EdgeKey> TopContourEdges;
     public HashSet<EdgeKey> BotContourEdges;
 
+    public Vector2[] MainUVs;
+
+    public List<Vector2> TopUVs;
+    public List<Vector2> BotUVs;
+
     public Dictionary<EdgeKey, (int top, int bottom)> EdgeCache;
     public Dictionary<int, (int top, int bottom)> OnPlaneVertexCache;
 

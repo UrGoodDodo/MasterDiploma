@@ -140,10 +140,14 @@ public static class MeshNObjCreator
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
-            Vector3 randomForce = Random.onUnitSphere * 2f;
+            Vector3 randomForce = Random.onUnitSphere * 0.7f;
             rb.AddForce(randomForce, ForceMode.Impulse);
         }
 
         return obj;
     }
+
+
+    
+
 }
