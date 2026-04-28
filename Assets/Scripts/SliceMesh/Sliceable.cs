@@ -29,11 +29,9 @@ public class Sliceable : MonoBehaviour
 
         int triangleCount = mesh.triangles.Length / 3;
 
-        // Если список уже синхронизирован с мешем — ничего не делаем
         if (triangleSurfaceTypes != null && triangleSurfaceTypes.Count == triangleCount)
             return;
 
-        // Инициализация по умолчанию: весь исходный объект считается Main
         triangleSurfaceTypes = new List<SurfaceType>(triangleCount);
         for (int i = 0; i < triangleCount; i++)
         {
