@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using System.Threading.Tasks;
 
 public static class VoronoiFractureGenerator
 {
@@ -24,6 +25,50 @@ public static class VoronoiFractureGenerator
                 continue;
 
             fragments.Add(cellResult);
+        }
+
+        return fragments;
+    }
+
+    public static List<MeshClipResult> GenerateFragmentsParallel(Mesh sourceMesh, Transform sourceTransform, List<SurfaceType> sourceTriangleTypes, List<Vector3> seedsWorld)
+    {
+        List<MeshClipResult> fragments = new List<MeshClipResult>();
+
+        if (sourceMesh == null || sourceTransform == null)
+            return fragments;
+
+        if (seedsWorld == null || seedsWorld.Count == 0)
+            return fragments;
+
+        RawMeshData rawSource = RawMeshConverter.FromMesh(sourceMesh, sourceTriangleTypes);
+
+        RawTransformData rawTransform = new RawTransformData(sourceTransform);
+
+        RawMeshData[] rawCells = new RawMeshData[seedsWorld.Count];
+
+        Parallel.For(0, seedsWorld.Count, i =>
+        {
+            bool success = RawVoronoiCellBuilder.TryBuildRawCell(rawSource, rawTransform, seedsWorld[i], seedsWorld, out RawMeshData cell);
+
+            if (success && cell != null && cell.IsValid)
+                rawCells[i] = cell;
+        });
+
+        for (int i = 0; i < rawCells.Length; i++)
+        {
+            RawMeshData rawCell = rawCells[i];
+
+            if (rawCell == null || !rawCell.IsValid)
+                continue;
+
+            Mesh mesh = RawMeshConverter.ToMesh(rawCell, $"Voronoi_Cell_{i}");
+
+            if (mesh == null)
+                continue;
+
+            List<SurfaceType> triangleTypes = new List<SurfaceType>(rawCell.TriangleSurfaceTypes);
+
+            fragments.Add(MeshClipResult.FromMesh(mesh, triangleTypes));
         }
 
         return fragments;
@@ -54,6 +99,62 @@ public static class VoronoiFractureGenerator
                 continue;
 
             fragments.Add(cellResult);
+        }
+
+        return fragments;
+    }
+
+    public static List<MeshClipResult> GenerateFragmentsWithNearestNeighborsParallel(Mesh sourceMesh, Transform sourceTransform, List<SurfaceType> sourceTriangleTypes, List<Vector3> seedsWorld, int neighborCount)
+    {
+        List<MeshClipResult> fragments = new List<MeshClipResult>();
+
+        if (sourceMesh == null || sourceTransform == null)
+            return fragments;
+
+        if (seedsWorld == null || seedsWorld.Count == 0)
+            return fragments;
+
+        if (seedsWorld.Count == 1)
+        {
+            fragments.Add(MeshClipResult.FromMesh(sourceMesh, new List<SurfaceType>(sourceTriangleTypes)));
+            return fragments;
+        }
+
+        neighborCount = Mathf.Clamp(neighborCount, 1, seedsWorld.Count - 1);
+
+        RawMeshData rawSource = RawMeshConverter.FromMesh(sourceMesh, sourceTriangleTypes);
+
+        RawTransformData rawTransform = new RawTransformData(sourceTransform);
+
+        RawMeshData[] rawCells = new RawMeshData[seedsWorld.Count];
+
+        Parallel.For(0, seedsWorld.Count, i =>
+        {
+            Vector3 seed = seedsWorld[i];
+
+            List<Vector3> neighbors = FindNearestSeeds(seed, seedsWorld, neighborCount);
+
+            bool success = RawVoronoiCellBuilder.TryBuildRawCellWithNeighbors(rawSource, rawTransform, seed, neighbors, out RawMeshData cell);
+
+            if (success && cell != null && cell.IsValid)
+                rawCells[i] = cell;
+        });
+
+        for (int i = 0; i < rawCells.Length; i++)
+        {
+            RawMeshData rawCell = rawCells[i];
+
+            if (rawCell == null || !rawCell.IsValid)
+                continue;
+
+            Mesh mesh = RawMeshConverter.ToMesh(rawCell, $"Voronoi_Cell_Nearest_{i}");
+
+            if (mesh == null)
+                continue;
+
+            List<SurfaceType> triangleTypes = new List<SurfaceType>(rawCell.TriangleSurfaceTypes);
+
+            fragments.Add(MeshClipResult.FromMesh(mesh, triangleTypes));
         }
 
         return fragments;

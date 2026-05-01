@@ -82,10 +82,7 @@ public static class TriangleSlicer
                 (vert_sign_2 == 0 ? 1 : 0) +
                 (vert_sign_3 == 0 ? 1 : 0);
 
-            Vector3 origNormal = Vector3.Cross(
-                mainVertices[triangle_ind_2] - mainVertices[triangle_ind_1],
-                mainVertices[triangle_ind_3] - mainVertices[triangle_ind_1]
-            ).normalized;
+            Vector3 origNormal = Vector3.Cross(mainVertices[triangle_ind_2] - mainVertices[triangle_ind_1], mainVertices[triangle_ind_3] - mainVertices[triangle_ind_1]).normalized;
 
             if (aboveCount == 3)
                 TringleSlicerHelper.ProcessAllTop(triangle_ind_1, triangle_ind_2, triangle_ind_3, origNormal, surfaceType, ref ctx);

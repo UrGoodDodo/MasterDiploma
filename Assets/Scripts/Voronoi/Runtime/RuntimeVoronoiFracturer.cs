@@ -53,7 +53,7 @@ public class RuntimeVoronoiFracturer : MonoBehaviour
 
         List<Vector3> seeds = useImpactSeeds ? VoronoiSeedGenerator.GenerateImpactSeedsInMesh(sourceMesh, transform, impactWorldPoint, seedCount, impactSeedRadius) : VoronoiSeedGenerator.GenerateRandomSeedsInMesh(sourceMesh, transform, seedCount);
 
-        List<MeshClipResult> fragments = useNearestNeighbors ? VoronoiFractureGenerator.GenerateFragmentsWithNearestNeighbors(sourceMesh, transform, sliceable.triangleSurfaceTypes, seeds, neighborCount) : VoronoiFractureGenerator.GenerateFragments(sourceMesh, transform, sliceable.triangleSurfaceTypes, seeds);
+        List<MeshClipResult> fragments = useNearestNeighbors ? VoronoiFractureGenerator.GenerateFragmentsWithNearestNeighborsParallel(sourceMesh, transform, sliceable.triangleSurfaceTypes, seeds, neighborCount) : VoronoiFractureGenerator.GenerateFragmentsParallel(sourceMesh, transform, sliceable.triangleSurfaceTypes, seeds);
 
         if (fragments == null || fragments.Count == 0)
             return;

@@ -9,6 +9,7 @@ public static class MeshNObjCreator
         mesh.SetVertices(vertices);
         mesh.SetTriangles(triangles, 0);
         mesh.RecalculateNormals();
+        mesh.RecalculateTangents();
         mesh.RecalculateBounds();
         return mesh;
     }
@@ -93,6 +94,7 @@ public static class MeshNObjCreator
         mesh.SetTriangles(subMeshCap, 1);
         mesh.SetUVs(0, allUVs);
         mesh.RecalculateNormals();
+        mesh.RecalculateTangents();
         mesh.RecalculateBounds();
         return mesh;
     }

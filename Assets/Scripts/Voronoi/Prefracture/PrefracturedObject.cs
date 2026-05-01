@@ -63,7 +63,7 @@ public class PrefracturedObject : MonoBehaviour
 
         List<Vector3> seeds = VoronoiSeedGenerator.GenerateRandomSeedsInMesh(sourceMesh, transform, seedCount);
 
-        List<MeshClipResult> fragments = useNearestNeighbors ? VoronoiFractureGenerator.GenerateFragmentsWithNearestNeighbors(sourceMesh, transform, sliceable.triangleSurfaceTypes, seeds, neighborCount) : VoronoiFractureGenerator.GenerateFragments(sourceMesh, transform, sliceable.triangleSurfaceTypes, seeds);
+        List<MeshClipResult> fragments = useNearestNeighbors ? VoronoiFractureGenerator.GenerateFragmentsWithNearestNeighborsParallel(sourceMesh, transform, sliceable.triangleSurfaceTypes, seeds, neighborCount) : VoronoiFractureGenerator.GenerateFragmentsParallel(sourceMesh, transform, sliceable.triangleSurfaceTypes, seeds);
 
         for (int i = 0; i < fragments.Count; i++)
         {

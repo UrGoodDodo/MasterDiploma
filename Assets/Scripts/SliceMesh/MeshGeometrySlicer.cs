@@ -142,14 +142,7 @@ public static class MeshGeometrySlicer
 
         sliceable.EnsureTriangleTypesInitialized();
 
-        return TryClip(
-            mf.sharedMesh,
-            sliceable.transform,
-            plane,
-            keepPositiveSide,
-            sliceable.triangleSurfaceTypes,
-            out result
-        );
+        return TryClip(mf.sharedMesh, sliceable.transform, plane, keepPositiveSide, sliceable.triangleSurfaceTypes, out result);
     }
 
 
