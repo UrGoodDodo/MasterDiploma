@@ -109,8 +109,8 @@ public static class RawTriangleSlicerHelper
         }
         else if (s0 > 0 && s2 > 0)
         {
-            aboveIdx1 = i0;
-            aboveIdx2 = i2;
+            aboveIdx1 = i2;
+            aboveIdx2 = i0;
             belowIdx = i1;
         }
         else
@@ -155,8 +155,8 @@ public static class RawTriangleSlicerHelper
         else if (s1 > 0)
         {
             aboveIdx = i1;
-            belowIdx1 = i0;
-            belowIdx2 = i2;
+            belowIdx1 = i2;
+            belowIdx2 = i0;
         }
         else
         {

@@ -77,36 +77,38 @@ public static class TringleSlicerHelper
         AddOrientedTriangle(ctx.BotVertices, ctx.BotTriangles, ctx.BotTriangleTypes, botBelow, botIntersection, botOn, origNormal, surfaceType);
     }
 
-    public static void ProcessTwoAboveOneBelow(int i0, int i1, int i2, int s0, int s1, int s2, Vector3 origNormal, SurfaceType surfaceType, ref SliceContext ctx) //++-
+    public static void ProcessTwoAboveOneBelow(int i0, int i1, int i2, int s0, int s1, int s2, Vector3 origNormal, SurfaceType surfaceType, ref SliceContext ctx)
     {
         int aboveIdx1, aboveIdx2, belowIdx;
 
         if (s0 > 0 && s1 > 0) { aboveIdx1 = i0; aboveIdx2 = i1; belowIdx = i2; }
-        else if (s0 > 0 && s2 > 0) { aboveIdx1 = i0; aboveIdx2 = i2; belowIdx = i1; }
+        else if (s0 > 0 && s2 > 0) { aboveIdx1 = i2; aboveIdx2 = i0; belowIdx = i1; }
         else { aboveIdx1 = i1; aboveIdx2 = i2; belowIdx = i0; }
 
         GetOrCreateIntersection(aboveIdx1, belowIdx, ref ctx, out int topEdge1, out int botEdge1);
         GetOrCreateIntersection(aboveIdx2, belowIdx, ref ctx, out int topEdge2, out int botEdge2);
 
-        ctx.TopContourEdges.Add(new EdgeKey(topEdge1, topEdge2));
-        ctx.BotContourEdges.Add(new EdgeKey(botEdge1, botEdge2));
-
         int topA1 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[aboveIdx1], ctx.MainUVs[aboveIdx1]);
         int topA2 = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[aboveIdx2], ctx.MainUVs[aboveIdx2]);
+        int botB = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[belowIdx], ctx.MainUVs[belowIdx]);
 
         AddOrientedTriangle(ctx.TopVertices, ctx.TopTriangles, ctx.TopTriangleTypes, topA1, topA2, topEdge1, origNormal, surfaceType);
-        AddOrientedTriangle(ctx.TopVertices, ctx.TopTriangles, ctx.TopTriangleTypes, topA2, topEdge2, topEdge1, origNormal, surfaceType);
+        bool topContourCarrierAdded = AddOrientedTriangle(ctx.TopVertices, ctx.TopTriangles, ctx.TopTriangleTypes, topA2, topEdge2, topEdge1, origNormal, surfaceType);
+        bool botContourCarrierAdded = AddOrientedTriangle(ctx.BotVertices, ctx.BotTriangles, ctx.BotTriangleTypes, botB, botEdge1, botEdge2, origNormal, surfaceType);
 
-        int botB = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[belowIdx], ctx.MainUVs[belowIdx]);
-        AddOrientedTriangle(ctx.BotVertices, ctx.BotTriangles, ctx.BotTriangleTypes, botB, botEdge1, botEdge2, origNormal, surfaceType);
+        if (topContourCarrierAdded)
+            ctx.TopContourEdges.Add(new EdgeKey(topEdge1, topEdge2));
+
+        if (botContourCarrierAdded)
+            ctx.BotContourEdges.Add(new EdgeKey(botEdge1, botEdge2));
     }
 
-    public static void ProcessOneAboveTwoBelow(int i0, int i1, int i2, int s0, int s1, int s2, Vector3 origNormal, SurfaceType surfaceType, ref SliceContext ctx) //+--
+    public static void ProcessOneAboveTwoBelow(int i0, int i1, int i2, int s0, int s1, int s2, Vector3 origNormal, SurfaceType surfaceType, ref SliceContext ctx)
     {
         int aboveIdx, belowIdx1, belowIdx2;
 
         if (s0 > 0) { aboveIdx = i0; belowIdx1 = i1; belowIdx2 = i2; }
-        else if (s1 > 0) { aboveIdx = i1; belowIdx1 = i0; belowIdx2 = i2; }
+        else if (s1 > 0) { aboveIdx = i1; belowIdx1 = i2; belowIdx2 = i0; }
         else { aboveIdx = i2; belowIdx1 = i0; belowIdx2 = i1; }
 
         GetOrCreateIntersection(aboveIdx, belowIdx1, ref ctx, out int topEdge1, out int botEdge1);
@@ -154,14 +156,20 @@ public static class TringleSlicerHelper
         return index;
     }
 
-    static void AddOrientedTriangle(List<Vector3> vertices, List<int> triangles, List<SurfaceType> triangleTypes, int idx1, int idx2, int idx3, Vector3 originalNormal, SurfaceType surfaceType)
+    private static bool AddOrientedTriangle(List<Vector3> vertices, List<int> triangles, List<SurfaceType> triangleTypes, int idx1, int idx2, int idx3, Vector3 originalNormal, SurfaceType surfaceType)
     {
         Vector3 p1 = vertices[idx1];
         Vector3 p2 = vertices[idx2];
         Vector3 p3 = vertices[idx3];
-        Vector3 newNormal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
 
-        if (Vector3.Dot(originalNormal, newNormal) < 0)
+        Vector3 cross = Vector3.Cross(p2 - p1, p3 - p1);
+
+        Vector3 newNormal = cross.normalized;
+        Vector3 referenceNormal = originalNormal.normalized;
+        float dot = Vector3.Dot(referenceNormal, newNormal);
+        bool flipped = dot < 0f;
+
+        if (flipped)
         {
             triangles.Add(idx1);
             triangles.Add(idx3);
@@ -175,6 +183,7 @@ public static class TringleSlicerHelper
         }
 
         triangleTypes.Add(surfaceType);
+        return true;
     }
 
     static void GetOrCreateSharedVertex( int originalIdx, Vector3[] mainVertices, Vector2[] mainUVs, List<Vector3> topVertices, List<Vector2> topUVs, List<Vector3> botVertices, List<Vector2> botUVs, Dictionary<int, (int top, int bottom)> cache, out int topIndex, out int botIndex)
@@ -195,6 +204,7 @@ public static class TringleSlicerHelper
     static void GetOrCreateIntersection(int idxA, int idxB, ref SliceContext ctx, out int topIndex, out int botIndex)
     {
         EdgeKey key = new EdgeKey(idxA, idxB);
+
         if (ctx.EdgeCache.TryGetValue(key, out var existing))
         {
             topIndex = existing.top;
@@ -202,51 +212,30 @@ public static class TringleSlicerHelper
             return;
         }
 
-        Vector3 intersectionLocal = GetIntersectionPointLocal(
-            idxA,
-            idxB,
-            ctx.MainVertices,
-            ctx.Transform,
-            ctx.Plane
-        );
+        Vector3 worldA = ctx.Transform.TransformPoint(ctx.MainVertices[idxA]);
+        Vector3 worldB = ctx.Transform.TransformPoint(ctx.MainVertices[idxB]);
 
-        Vector2 intersectionUV = GetIntersectionUV(
-            idxA,
-            idxB,
-            ctx.MainVertices,
-            ctx.MainUVs,
-            ctx.Transform,
-            ctx.Plane
-        );
+        float distA = ctx.Plane.GetDistanceToPoint(worldA);
+        float distB = ctx.Plane.GetDistanceToPoint(worldB);
+        float denominator = distB - distA;
+
+        if (Mathf.Abs(denominator) < 0.00000001f)
+        {
+            topIndex = AddVertex(ctx.TopVertices, ctx.TopUVs, ctx.MainVertices[idxA], ctx.MainUVs[idxA]);
+            botIndex = AddVertex(ctx.BotVertices, ctx.BotUVs, ctx.MainVertices[idxA], ctx.MainUVs[idxA]);
+            ctx.EdgeCache.Add(key, (topIndex, botIndex));
+            return;
+        }
+
+        float t = Mathf.Clamp01(-distA / denominator);
+
+        Vector3 worldPoint = Vector3.Lerp(worldA, worldB, t);
+        Vector3 intersectionLocal = ctx.Transform.InverseTransformPoint(worldPoint);
+        Vector2 intersectionUV = Vector2.Lerp(ctx.MainUVs[idxA], ctx.MainUVs[idxB], t);
 
         topIndex = AddVertex(ctx.TopVertices, ctx.TopUVs, intersectionLocal, intersectionUV);
         botIndex = AddVertex(ctx.BotVertices, ctx.BotUVs, intersectionLocal, intersectionUV);
 
         ctx.EdgeCache.Add(key, (topIndex, botIndex));
-    }
-
-    static Vector3 GetIntersectionPointLocal(int idxA, int idxB, Vector3[] localVerts, Transform objTransform, Plane worldPlane)
-    {
-        Vector3 worldA = objTransform.TransformPoint(localVerts[idxA]);
-        Vector3 worldB = objTransform.TransformPoint(localVerts[idxB]);
-        float distA = worldPlane.GetDistanceToPoint(worldA);
-        float distB = worldPlane.GetDistanceToPoint(worldB);
-        float t = -distA / (distB - distA); // t от 0 до 1
-        Vector3 worldPoint = worldA + t * (worldB - worldA);
-        return objTransform.InverseTransformPoint(worldPoint);
-    }
-
-    static Vector2 GetIntersectionUV(int idxA, int idxB, Vector3[] localVerts, Vector2[] mainUVs, Transform objTransform, Plane worldPlane)
-    {
-        Vector3 worldA = objTransform.TransformPoint(localVerts[idxA]);
-        Vector3 worldB = objTransform.TransformPoint(localVerts[idxB]);
-
-        float distA = worldPlane.GetDistanceToPoint(worldA);
-        float distB = worldPlane.GetDistanceToPoint(worldB);
-
-        float t = -distA / (distB - distA);
-        t = Mathf.Clamp01(t);
-
-        return Vector2.Lerp(mainUVs[idxA], mainUVs[idxB], t);
     }
 }

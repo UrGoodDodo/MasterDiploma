@@ -14,6 +14,11 @@ public static class TriangleSlicer
         if (mainUVs == null || mainUVs.Length != mainVertices.Length)
             mainUVs = new Vector2[mainVertices.Length];
 
+        //
+        Vector3[] mainNormals = mesh.normals;
+        bool hasValidNormals = mainNormals != null && mainNormals.Length == mainVertices.Length;
+        //
+
         topVertices = new List<Vector3>();
         topUVs = new List<Vector2>();
         topTriangles = new List<int>();
@@ -82,7 +87,11 @@ public static class TriangleSlicer
                 (vert_sign_2 == 0 ? 1 : 0) +
                 (vert_sign_3 == 0 ? 1 : 0);
 
-            Vector3 origNormal = Vector3.Cross(mainVertices[triangle_ind_2] - mainVertices[triangle_ind_1], mainVertices[triangle_ind_3] - mainVertices[triangle_ind_1]).normalized;
+
+            Vector3 faceNormal = Vector3.Cross(mainVertices[triangle_ind_2] - mainVertices[triangle_ind_1], mainVertices[triangle_ind_3] - mainVertices[triangle_ind_1]).normalized;
+            Vector3 averagedNormal = hasValidNormals ? (mainNormals[triangle_ind_1] + mainNormals[triangle_ind_2] + mainNormals[triangle_ind_3]).normalized : faceNormal;
+            Vector3 origNormal = averagedNormal.sqrMagnitude > 0.000001f ? averagedNormal : faceNormal;
+
 
             if (aboveCount == 3)
                 TringleSlicerHelper.ProcessAllTop(triangle_ind_1, triangle_ind_2, triangle_ind_3, origNormal, surfaceType, ref ctx);
@@ -184,37 +193,123 @@ public static class TriangleSlicer
         contourEdges = newEdges;
     }
 
-    public static HashSet<EdgeKey> RemapContourEdgesByPosition( List<Vector3> vertices, HashSet<EdgeKey> contourEdges, float epsilon = 0.001f)
+    public static HashSet<EdgeKey> RemapContourEdgesByPosition(List<Vector3> vertices, HashSet<EdgeKey> contourEdges, float epsilon = 0.001f)
     {
-        var oldToRepresentative = new int[vertices.Count];
+        if (vertices == null || contourEdges == null || contourEdges.Count == 0)
+            return new HashSet<EdgeKey>();
 
-        for (int i = 0; i < vertices.Count; i++)
+        HashSet<int> contourIndices = CollectContourIndices(vertices, contourEdges);
+
+        var oldToRepresentative = new Dictionary<int, int>();
+
+        foreach (int index in contourIndices)
+            oldToRepresentative[index] = index;
+
+        List<int> orderedContourIndices = new List<int>(contourIndices);
+
+        for (int i = 0; i < orderedContourIndices.Count; i++)
         {
-            oldToRepresentative[i] = i;
+            int current = orderedContourIndices[i];
 
             for (int j = 0; j < i; j++)
             {
-                if (Vector3.Distance(vertices[i], vertices[j]) < epsilon)
+                int previous = orderedContourIndices[j];
+
+                if (Vector3.Distance(vertices[current], vertices[previous]) < epsilon)
                 {
-                    oldToRepresentative[i] = oldToRepresentative[j];
+                    oldToRepresentative[current] = oldToRepresentative[previous];
                     break;
                 }
             }
         }
 
+        var representativeToMembers = BuildRepresentativeGroups(oldToRepresentative);
+        var candidateEdges = BuildRemappedEdges(oldToRepresentative, contourEdges);
+        var candidateDegrees = CountDegrees(candidateEdges);
+
+        foreach (var pair in representativeToMembers)
+        {
+            int representative = pair.Key;
+
+            if (!candidateDegrees.TryGetValue(representative, out int degree))
+                continue;
+
+            if (degree <= 2)
+                continue;
+
+            foreach (int member in pair.Value)
+                oldToRepresentative[member] = member;
+        }
+
+        return BuildRemappedEdges(oldToRepresentative, contourEdges);
+    }
+
+    private static HashSet<int> CollectContourIndices(List<Vector3> vertices, HashSet<EdgeKey> contourEdges)
+    {
+        HashSet<int> indices = new HashSet<int>();
+
+        foreach (EdgeKey edge in contourEdges)
+        {
+            if (edge.A >= 0 && edge.A < vertices.Count)
+                indices.Add(edge.A);
+
+            if (edge.B >= 0 && edge.B < vertices.Count)
+                indices.Add(edge.B);
+        }
+
+        return indices;
+    }
+
+    private static Dictionary<int, List<int>> BuildRepresentativeGroups(Dictionary<int, int> oldToRepresentative)
+    {
+        var representativeToMembers = new Dictionary<int, List<int>>();
+
+        foreach (var pair in oldToRepresentative)
+        {
+            int member = pair.Key;
+            int representative = pair.Value;
+
+            if (!representativeToMembers.ContainsKey(representative))
+                representativeToMembers[representative] = new List<int>();
+
+            representativeToMembers[representative].Add(member);
+        }
+
+        return representativeToMembers;
+    }
+
+    private static HashSet<EdgeKey> BuildRemappedEdges(Dictionary<int, int> oldToRepresentative, HashSet<EdgeKey> contourEdges)
+    {
         var remappedEdges = new HashSet<EdgeKey>();
 
-        foreach (var edge in contourEdges)
+        foreach (EdgeKey edge in contourEdges)
         {
-            int a = oldToRepresentative[edge.A];
-            int b = oldToRepresentative[edge.B];
+            if (!oldToRepresentative.TryGetValue(edge.A, out int a))
+                continue;
+
+            if (!oldToRepresentative.TryGetValue(edge.B, out int b))
+                continue;
 
             if (a != b)
-            {
                 remappedEdges.Add(new EdgeKey(a, b));
-            }
         }
 
         return remappedEdges;
+    }
+
+    private static Dictionary<int, int> CountDegrees(HashSet<EdgeKey> edges)
+    {
+        var degrees = new Dictionary<int, int>();
+
+        foreach (var edge in edges)
+        {
+            if (!degrees.ContainsKey(edge.A)) degrees[edge.A] = 0;
+            if (!degrees.ContainsKey(edge.B)) degrees[edge.B] = 0;
+
+            degrees[edge.A]++;
+            degrees[edge.B]++;
+        }
+
+        return degrees;
     }
 }

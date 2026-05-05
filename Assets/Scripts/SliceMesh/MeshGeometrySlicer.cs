@@ -19,31 +19,52 @@ public static class MeshGeometrySlicer
 
         TriangleSlicer.ClassifyTriangles(sourceMesh, sourceTransform, classified, plane, sourceTriangleTypes, out List<Vector3> topVerts, out List<Vector2> topUVs, out List<int> topTris, out List<SurfaceType> topTriangleTypes, out List<Vector3> botVerts, out List<Vector2> botUVs, out List<int> botTris, out List<SurfaceType> botTriangleTypes, out HashSet<EdgeKey> topEdges, out HashSet<EdgeKey> botEdges);
 
-        var mergedTopEdges = TriangleSlicer.RemapContourEdgesByPosition(topVerts, topEdges);
-        var mergedBotEdges = TriangleSlicer.RemapContourEdgesByPosition(botVerts, botEdges);
 
-        var topLoops = CapCreator.ExtractLoopsFromEdges(mergedTopEdges);
-        var botLoops = CapCreator.ExtractLoopsFromEdges(mergedBotEdges);
+        var mergedTopEdges = TriangleSlicer.RemapContourEdgesByPosition(topVerts, topEdges, 0.00001f);
+        var mergedBotEdges = TriangleSlicer.RemapContourEdgesByPosition(botVerts, botEdges, 0.00001f);
+
 
         Vector3 localPlaneNormal = sourceTransform.InverseTransformDirection(plane.normal).normalized;
+
+
+
+        //
+        var topContours = ContourExtractor.ExtractContoursFromEdges(mergedTopEdges, topVerts, OpenChainMode.CloseSmallGaps, 0.001f);
+        var botContours = ContourExtractor.ExtractContoursFromEdges(mergedBotEdges, botVerts, OpenChainMode.CloseSmallGaps, 0.001f);
+        var topLoops = topContours.ClosedLoops;
+        var botLoops = botContours.ClosedLoops;
+
+        //SliceContourSphereDebugView.SetLoops(sourceTransform, topVerts, topLoops, botVerts, botLoops);
+
+        foreach (string warning in topContours.Warnings) Debug.LogWarning($"Top cap: {warning}");
+        foreach (string warning in botContours.Warnings) Debug.LogWarning($"Bottom cap: {warning}");
+        var topProjectedLoops = CapProjection.ProjectLoopsTo2D(topLoops, topVerts, -localPlaneNormal);
+        var botProjectedLoops = CapProjection.ProjectLoopsTo2D(botLoops, botVerts, localPlaneNormal);
+        var topRegions = CapTopologyBuilder.BuildRegions(topProjectedLoops);
+        var botRegions = CapTopologyBuilder.BuildRegions(botProjectedLoops);
+
+        //CapTopologyBuilder.DebugRegions("Top", topRegions);
+        //CapTopologyBuilder.DebugRegions("Bottom", botRegions);
+        //for (int i = 0; i < topProjectedLoops.Count; i++) Debug.Log($"Top projected loop {i}: points={topProjectedLoops[i].Points.Count}, signedArea={topProjectedLoops[i].SignedArea}, absArea={topProjectedLoops[i].AbsArea}");
+        //for (int i = 0; i < botProjectedLoops.Count; i++) Debug.Log($"Bottom projected loop {i}: points={botProjectedLoops[i].Points.Count}, signedArea={botProjectedLoops[i].SignedArea}, absArea={botProjectedLoops[i].AbsArea}");
+        //CapProjection.DebugLoopContainment("Top", topProjectedLoops);
+        //CapProjection.DebugLoopContainment("Bottom", botProjectedLoops);
+        //
+
+        if (topContours.HasOpenChains) Debug.LogWarning("Top cap has open chains. Cap may be incomplete.");
+        if (botContours.HasOpenChains) Debug.LogWarning("Bottom cap has open chains. Cap may be incomplete.");
 
         List<Vector3> topCapVerts = new List<Vector3>();
         List<int> topCapTris = new List<int>();
         List<SurfaceType> topCapTriangleTypes = new List<SurfaceType>();
 
-        foreach (var loop in topLoops)
-        {
-            CapCreator.TriangulateCapByType(CapCreator.CapType.EarClipping, loop, topVerts, topCapVerts, topCapTris, topCapTriangleTypes, -localPlaneNormal);
-        }
+        bool topCapOk = CapCreator.TriangulateCapAuto(topLoops, topVerts, topCapVerts, topCapTris, topCapTriangleTypes, -localPlaneNormal);
 
         List<Vector3> botCapVerts = new List<Vector3>();
         List<int> botCapTris = new List<int>();
         List<SurfaceType> botCapTriangleTypes = new List<SurfaceType>();
 
-        foreach (var loop in botLoops)
-        {
-            CapCreator.TriangulateCapByType(CapCreator.CapType.EarClipping, loop, botVerts, botCapVerts, botCapTris, botCapTriangleTypes, localPlaneNormal);
-        }
+        bool botCapOk = CapCreator.TriangulateCapAuto(botLoops, botVerts, botCapVerts, botCapTris, botCapTriangleTypes, localPlaneNormal);
 
         Mesh topMesh = MeshNObjCreator.CreateNewSubMesh(topVerts, topUVs, topTris, topTriangleTypes, topCapVerts, topCapTris, topCapTriangleTypes, "TopPart");
 

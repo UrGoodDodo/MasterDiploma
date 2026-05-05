@@ -6,10 +6,69 @@ public static class CapCreator
     public enum CapType
     {
         Fan,
-        EarClipping
+        EarClipping,
+        HoleAware
     }
 
-    public static void TriangulateCapByType(CapType capType , List<int> loop, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, List<SurfaceType> outTriangleTypes, Vector3 normal)
+    public static bool TriangulateCapAuto(List<List<int>> loops, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, List<SurfaceType> outTriangleTypes, Vector3 normal)
+    {
+        var validation = CapLoopValidator.ValidateLoops(loops, mainVertices, normal);
+
+        if (validation == null || !validation.HasAny) return false;
+
+        List<ProjectedLoop> projectedLoops = CapProjection.ProjectLoopsTo2D(validation.ValidLoops, mainVertices, normal);
+        List<CapRegion> regions = CapTopologyBuilder.BuildRegions(projectedLoops);
+
+        return TriangulateCapRegions(regions, mainVertices, capVertices, outTriangles, outTriangleTypes, normal);
+    }
+
+    public static bool TriangulateCapRegions(List<CapRegion> regions, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, List<SurfaceType> outTriangleTypes, Vector3 normal)
+    {
+        if (regions == null || regions.Count == 0) return false;
+
+        bool anySuccess = false;
+
+        for (int i = 0; i < regions.Count; i++)
+        {
+            CapRegion region = regions[i];
+
+            if (region == null || region.Outer == null || region.Outer.Indices == null || region.Outer.Indices.Count < 3) continue;
+
+            if (region.Holes == null || region.Holes.Count == 0)
+            {
+                ICapStrategy simpleStrategy = ChooseSimpleCapStrategy(region.Outer.Indices, mainVertices);
+                simpleStrategy.TriangulateCap(region.Outer.Indices, mainVertices, capVertices, outTriangles, outTriangleTypes, normal);
+                anySuccess = true;
+            }
+            else
+            {
+                CapLoopSet loopSet = new CapLoopSet();
+                loopSet.OuterLoop = region.Outer.Indices;
+
+                for (int h = 0; h < region.Holes.Count; h++)
+                {
+                    if (region.Holes[h] == null || region.Holes[h].Indices == null || region.Holes[h].Indices.Count < 3) continue;
+                    loopSet.Holes.Add(region.Holes[h].Indices);
+                }
+
+                IHoleCapStrategy holeStrategy = new HoleAwareCap();
+
+                if (holeStrategy.TriangulateCap(loopSet, mainVertices, capVertices, outTriangles, outTriangleTypes, normal)) anySuccess = true;
+            }
+        }
+
+        return anySuccess;
+    }
+
+    private static ICapStrategy ChooseSimpleCapStrategy(List<int> loop, List<Vector3> mainVertices)
+    {
+        if (loop.Count == 3)
+            return new FanCap();
+
+        return new EarCap();
+    }
+
+    public static void TriangulateCapByType(CapType capType, List<int> loop, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, List<SurfaceType> outTriangleTypes, Vector3 normal)
     {
         ICapStrategy capStrategy;
 
@@ -18,103 +77,33 @@ public static class CapCreator
             case CapType.Fan:
                 capStrategy = new FanCap();
                 break;
+
             case CapType.EarClipping:
                 capStrategy = new EarCap();
                 break;
+
             default:
-                capStrategy = new FanCap();
+                capStrategy = new EarCap();
                 break;
         }
 
         capStrategy.TriangulateCap(loop, mainVertices, capVertices, outTriangles, outTriangleTypes, normal);
     }
 
-    //-----------------------------------------------------------------------------------------
-
-
-    public static List<List<int>> ExtractLoopsFromEdges(HashSet<EdgeKey> contourEdges)
+    public static bool TriangulateCapSetByType(CapType capType, CapLoopSet loopSet, List<Vector3> mainVertices, List<Vector3> capVertices, List<int> outTriangles, List<SurfaceType> outTriangleTypes, Vector3 normal)
     {
-        var adjacency = new Dictionary<int, List<int>>();
+        if (loopSet == null || !loopSet.IsValid || loopSet.OuterLoop == null || loopSet.OuterLoop.Count < 3)
+            return false;
 
-        foreach (var edge in contourEdges)
+        if (capType != CapType.HoleAware)
         {
-            if (!adjacency.ContainsKey(edge.A))
-                adjacency[edge.A] = new List<int>();
-
-            if (!adjacency.ContainsKey(edge.B))
-                adjacency[edge.B] = new List<int>();
-
-            adjacency[edge.A].Add(edge.B);
-            adjacency[edge.B].Add(edge.A);
+            TriangulateCapByType(capType, loopSet.OuterLoop, mainVertices, capVertices, outTriangles, outTriangleTypes, normal);
+            return true;
         }
 
-        var loops = new List<List<int>>();
-        var visitedVertices = new HashSet<int>();
-
-        foreach (var start in adjacency.Keys)
-        {
-            if (visitedVertices.Contains(start))
-                continue;
-
-            if (adjacency[start].Count < 2)
-                continue;
-
-            List<int> loop = BuildSingleLoop(start, adjacency);
-
-            if (loop != null && loop.Count >= 3)
-            {
-                foreach (int v in loop)
-                    visitedVertices.Add(v);
-
-                loops.Add(loop);
-            }
-        }
-
-        return loops;
+        IHoleCapStrategy strategy = new HoleAwareCap();
+        return strategy.TriangulateCap(loopSet, mainVertices, capVertices, outTriangles, outTriangleTypes, normal);
     }
 
-    private static List<int> BuildSingleLoop(int start, Dictionary<int, List<int>> adjacency)
-    {
-        List<int> loop = new List<int>();
-
-        int prev = -1;
-        int current = start;
-
-        int safety = 0;
-
-        while (safety++ < 10000)
-        {
-            loop.Add(current);
-
-            List<int> neighbors = adjacency[current];
-
-            int next = -1;
-
-            for (int i = 0; i < neighbors.Count; i++)
-            {
-                if (neighbors[i] != prev)
-                {
-                    next = neighbors[i];
-                    break;
-                }
-            }
-
-            if (next == -1)
-                return null;
-
-            if (next == start)
-            {
-                return loop;
-            }
-
-            prev = current;
-            current = next;
-
-            if (loop.Contains(current))
-            {
-                return null;
-            }
-        }
-        return null;
-    }
+    
 }

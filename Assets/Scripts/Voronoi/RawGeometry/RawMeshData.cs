@@ -32,11 +32,6 @@ public class RawMeshData
 
     public RawMeshData Clone()
     {
-        return new RawMeshData(
-            Vertices != null ? (Vector3[])Vertices.Clone() : null,
-            UVs != null ? (Vector2[])UVs.Clone() : null,
-            Triangles != null ? (int[])Triangles.Clone() : null,
-            TriangleSurfaceTypes != null ? (SurfaceType[])TriangleSurfaceTypes.Clone() : null
-        );
+        return new RawMeshData((Vector3[])Vertices.Clone(), (Vector2[])UVs.Clone(), (int[])Triangles.Clone(), (SurfaceType[])TriangleSurfaceTypes.Clone());
     }
 }

@@ -81,17 +81,33 @@ public static class RawMeshGeometrySlicer
 
         RawTriangleSlicer.ClassifyTriangles(source, classified, ref ctx);
 
-        HashSet<EdgeKey> mergedTopEdges = RemapContourEdgesByPosition(top.Vertices, ctx.TopContourEdges);
+        //
+        RawSliceDiagnostics.LogAfterTriangles(top, bottom, ctx);
+        //
 
-        HashSet<EdgeKey> mergedBottomEdges = RemapContourEdgesByPosition(bottom.Vertices, ctx.BottomContourEdges);
+        HashSet<EdgeKey> mergedTopEdges = RemapContourEdgesByPosition(top.Vertices, ctx.TopContourEdges, 0.00001f);
 
-        List<List<int>> topLoops = CapCreator.ExtractLoopsFromEdges(mergedTopEdges);
+        HashSet<EdgeKey> mergedBottomEdges = RemapContourEdgesByPosition(bottom.Vertices, ctx.BottomContourEdges, 0.00001f);
 
-        List<List<int>> bottomLoops = CapCreator.ExtractLoopsFromEdges(mergedBottomEdges);
+        //
+        RawSliceDiagnostics.LogAfterRemap(mergedTopEdges, mergedBottomEdges);
+        //
 
-        AddCapsToBuildData(top, topLoops, -localPlaneNormal);
+        ContourExtractionResult topContours = ContourExtractor.ExtractContoursFromEdges(mergedTopEdges,top.Vertices, OpenChainMode.CloseSmallGaps, 0.001f);
 
-        AddCapsToBuildData(bottom, bottomLoops, localPlaneNormal);
+        ContourExtractionResult bottomContours = ContourExtractor.ExtractContoursFromEdges(mergedBottomEdges, bottom.Vertices, OpenChainMode.CloseSmallGaps, 0.001f);
+
+        AddCapsToBuildData("TOP", top, topContours.ClosedLoops, -localPlaneNormal);
+
+        AddCapsToBuildData("BOT", bottom, bottomContours.ClosedLoops, localPlaneNormal);
+
+        //
+        RawSliceDiagnostics.LogAfterAllCaps(top, bottom);
+        //
+
+        RawMeshData topMesh = top.ToRawMeshData();
+        RawMeshData bottomMesh = bottom.ToRawMeshData();
+        RawSliceDiagnostics.LogFinal(topMesh, bottomMesh);
 
         result = new RawSliceResult
         {
@@ -102,71 +118,161 @@ public static class RawMeshGeometrySlicer
         return true;
     }
 
-    private static void AddCapsToBuildData(RawSliceBuildData buildData, List<List<int>> loops, Vector3 capNormal)
+    private static void AddCapsToBuildData(string label, RawSliceBuildData buildData, List<List<int>> loops, Vector3 capNormal)
     {
-        if (loops == null || loops.Count == 0)
-            return;
+        //
+        RawSliceDiagnostics.LogBeforeCaps(label, buildData, loops);
+        //
 
-        foreach (List<int> loop in loops)
-        {
-            List<Vector3> capVertices = new List<Vector3>();
-            List<int> capTriangles = new List<int>();
-            List<SurfaceType> capTriangleTypes = new List<SurfaceType>();
+        if (loops == null || loops.Count == 0) return;
 
-            CapCreator.TriangulateCapByType(CapCreator.CapType.EarClipping, loop, buildData.Vertices, capVertices, capTriangles, capTriangleTypes, capNormal);
+        List<Vector3> capVertices = new List<Vector3>();
+        List<int> capTriangles = new List<int>();
+        List<SurfaceType> capTriangleTypes = new List<SurfaceType>();
 
-            int capOffset = buildData.Vertices.Count;
+        bool success = CapCreator.TriangulateCapAuto(loops, buildData.Vertices, capVertices, capTriangles, capTriangleTypes, capNormal);
+        if (!success) return;
 
-            for (int i = 0; i < capVertices.Count; i++)
-            {
-                buildData.Vertices.Add(capVertices[i]);
-                buildData.UVs.Add(Vector2.zero);
-            }
+        //
+        RawSliceDiagnostics.LogCapResult(label, success, capVertices, capTriangles, capTriangleTypes);
+        //
 
-            for (int i = 0; i < capTriangles.Count; i += 3)
-            {
-                int triIndex = i / 3;
+        int vertexOffset = buildData.Vertices.Count;
 
-                SurfaceType type = SurfaceType.Cap;
+        buildData.Vertices.AddRange(capVertices);
 
-                if (capTriangleTypes != null && triIndex < capTriangleTypes.Count)
-                    type = capTriangleTypes[triIndex];
+        for (int i = 0; i < capVertices.Count; i++) buildData.UVs.Add(Vector2.zero);
 
-                buildData.AddTriangle(capTriangles[i] + capOffset, capTriangles[i + 1] + capOffset, capTriangles[i + 2] + capOffset, type);
-            }
-        }
+        for (int i = 0; i < capTriangles.Count; i++) buildData.Triangles.Add(capTriangles[i] + vertexOffset);
+
+        buildData.TriangleSurfaceTypes.AddRange(capTriangleTypes);
+
+        //
+        RawSliceDiagnostics.LogAfterCaps(label, buildData);
+        //
     }
 
-    private static HashSet<EdgeKey> RemapContourEdgesByPosition(List<Vector3> vertices, HashSet<EdgeKey> contourEdges, float epsilon = 0.001f)
+    private static HashSet<EdgeKey> RemapContourEdgesByPosition(List<Vector3> vertices, HashSet<EdgeKey> contourEdges, float epsilon = 0.00001f)
     {
-        int[] oldToRepresentative = new int[vertices.Count];
+        if (vertices == null || contourEdges == null || contourEdges.Count == 0)
+            return new HashSet<EdgeKey>();
 
-        for (int i = 0; i < vertices.Count; i++)
+        HashSet<int> contourIndices = CollectContourIndices(vertices, contourEdges);
+
+        var oldToRepresentative = new Dictionary<int, int>();
+
+        foreach (int index in contourIndices)
+            oldToRepresentative[index] = index;
+
+        List<int> orderedContourIndices = new List<int>(contourIndices);
+
+        for (int i = 0; i < orderedContourIndices.Count; i++)
         {
-            oldToRepresentative[i] = i;
+            int current = orderedContourIndices[i];
 
             for (int j = 0; j < i; j++)
             {
-                if (Vector3.Distance(vertices[i], vertices[j]) < epsilon)
+                int previous = orderedContourIndices[j];
+
+                if (Vector3.Distance(vertices[current], vertices[previous]) < epsilon)
                 {
-                    oldToRepresentative[i] = oldToRepresentative[j];
+                    oldToRepresentative[current] = oldToRepresentative[previous];
                     break;
                 }
             }
         }
 
-        HashSet<EdgeKey> remappedEdges = new HashSet<EdgeKey>();
+        var representativeToMembers = BuildRepresentativeGroups(oldToRepresentative);
+        var candidateEdges = BuildRemappedEdges(oldToRepresentative, contourEdges);
+        var candidateDegrees = CountDegrees(candidateEdges);
+
+        foreach (var pair in representativeToMembers)
+        {
+            int representative = pair.Key;
+
+            if (!candidateDegrees.TryGetValue(representative, out int degree))
+                continue;
+
+            if (degree <= 2)
+                continue;
+
+            foreach (int member in pair.Value)
+                oldToRepresentative[member] = member;
+        }
+
+        return BuildRemappedEdges(oldToRepresentative, contourEdges);
+    }
+
+    private static HashSet<int> CollectContourIndices(List<Vector3> vertices, HashSet<EdgeKey> contourEdges)
+    {
+        HashSet<int> indices = new HashSet<int>();
 
         foreach (EdgeKey edge in contourEdges)
         {
-            int a = oldToRepresentative[edge.A];
-            int b = oldToRepresentative[edge.B];
+            if (edge.A >= 0 && edge.A < vertices.Count)
+                indices.Add(edge.A);
+
+            if (edge.B >= 0 && edge.B < vertices.Count)
+                indices.Add(edge.B);
+        }
+
+        return indices;
+    }
+
+    private static Dictionary<int, List<int>> BuildRepresentativeGroups(Dictionary<int, int> oldToRepresentative)
+    {
+        var representativeToMembers = new Dictionary<int, List<int>>();
+
+        foreach (var pair in oldToRepresentative)
+        {
+            int member = pair.Key;
+            int representative = pair.Value;
+
+            if (!representativeToMembers.ContainsKey(representative))
+                representativeToMembers[representative] = new List<int>();
+
+            representativeToMembers[representative].Add(member);
+        }
+
+        return representativeToMembers;
+    }
+
+    private static HashSet<EdgeKey> BuildRemappedEdges(Dictionary<int, int> oldToRepresentative, HashSet<EdgeKey> contourEdges)
+    {
+        var remappedEdges = new HashSet<EdgeKey>();
+
+        foreach (EdgeKey edge in contourEdges)
+        {
+            if (!oldToRepresentative.TryGetValue(edge.A, out int a))
+                continue;
+
+            if (!oldToRepresentative.TryGetValue(edge.B, out int b))
+                continue;
 
             if (a != b)
                 remappedEdges.Add(new EdgeKey(a, b));
         }
 
         return remappedEdges;
+    }
+
+    private static Dictionary<int, int> CountDegrees(HashSet<EdgeKey> edges)
+    {
+        var degrees = new Dictionary<int, int>();
+
+        foreach (EdgeKey edge in edges)
+        {
+            if (!degrees.ContainsKey(edge.A))
+                degrees[edge.A] = 0;
+
+            if (!degrees.ContainsKey(edge.B))
+                degrees[edge.B] = 0;
+
+            degrees[edge.A]++;
+            degrees[edge.B]++;
+        }
+
+        return degrees;
     }
 
     private static bool HasBothSides(int[] classified)
